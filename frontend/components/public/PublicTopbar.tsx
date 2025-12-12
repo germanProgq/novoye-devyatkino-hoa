@@ -39,7 +39,7 @@ const PublicTopbar: React.FC = () => {
           </div>
         </div>
 
-        <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Навигация по открытым разделам">
+        <nav className="flex gap-2 overflow-x-auto hide-scrollbar pb-1" aria-label="Навигация по открытым разделам">
           {NAV_LINKS.map((link) => (
             <NavLink
               key={link.to}

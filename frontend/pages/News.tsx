@@ -45,7 +45,7 @@ const News: React.FC = () => {
         {/* Main Feed */}
         <div className="lg:col-span-3 space-y-6">
           {/* Filters */}
-          <div className="flex gap-2 overflow-x-auto pb-2">
+          <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-2">
             {filters.map(f => (
               <button
                 key={f}

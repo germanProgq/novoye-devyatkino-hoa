@@ -1,10 +1,13 @@
 export interface DocumentItem {
   id: string;
   title: string;
-  date: string;
-  size: string;
-  type: 'pdf' | 'doc' | 'xls';
   category: string;
+  description?: string;
+  year?: number;
+  type: 'pdf' | 'doc' | 'docx' | 'xls' | 'xlsx' | string;
+  sizeBytes: number;
+  fileName: string;
+  downloadUrl: string;
 }
 
 export interface NewsItem {

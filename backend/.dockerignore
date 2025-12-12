@@ -1,0 +1,6 @@
+# Exclude local build outputs to avoid stale CMake cache in Docker builds
+build
+CMakeCache.txt
+CMakeFiles
+cmake_install.cmake
+Makefile
