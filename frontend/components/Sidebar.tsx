@@ -8,6 +8,7 @@ const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, o
     { name: 'Документы', path: '/documents', icon: 'folder' },
     { name: 'Новости', path: '/news', icon: 'newspaper' },
     { name: 'Вопросы и ответы', path: '/faq', icon: 'help' },
+    { name: 'Админ-панель', path: '/admin', icon: 'admin_panel_settings' },
   ];
 
   const sidebarClasses = `

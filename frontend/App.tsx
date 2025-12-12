@@ -8,6 +8,7 @@ import MeterReadings from './pages/MeterReadings';
 import Documents from './pages/Documents';
 import News from './pages/News';
 import FAQ from './pages/FAQ';
+import Admin from './pages/Admin';
 import {
   AboutBoardPage,
   AboutGalleryPage,
@@ -39,6 +40,7 @@ const AppLayout: React.FC = () => {
       case '/documents': return 'Документы';
       case '/news': return 'Новости';
       case '/faq': return 'Вопросы';
+      case '/admin': return 'Админ';
       default: return 'Портал ТСЖ';
     }
   };
@@ -156,6 +158,7 @@ const App: React.FC = () => {
             <Route path="/documents" element={<Documents />} />
             <Route path="/news" element={<News />} />
             <Route path="/faq" element={<FAQ />} />
+            <Route path="/admin" element={<Admin />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

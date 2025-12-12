@@ -126,7 +126,7 @@ const MeterReadings: React.FC = () => {
         <div className="px-6 py-4 border-b border-[color:var(--color-info-border)]">
           <h3 className="font-bold text-[var(--color-ink)]">История показаний</h3>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hide-scrollbar">
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-[var(--color-ink)] uppercase bg-[var(--color-info-surface)]">
               <tr>
