@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Портал ТСЖ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+            colors: {
+              primary: 'var(--color-forest)',
+              accent: 'var(--color-brick)',
+              sand: 'var(--color-sand)',
+              info: '#AFC2D7',
+              ink: 'var(--color-ink)',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .material-symbols-outlined.filled {
+        font-variation-settings: 'FILL' 1;
+      }
+      @keyframes heroFade {
+        from {
+          opacity: 0;
+          transform: translateY(24px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .hero-fade {
+        opacity: 0;
+        animation: heroFade 0.9s ease-out 0.1s forwards;
+      }
+      .hero-fade-1 {
+        opacity: 0;
+        animation: heroFade 0.8s ease-out 0.1s forwards;
+      }
+      .hero-fade-2 {
+        opacity: 0;
+        animation: heroFade 0.85s ease-out 0.18s forwards;
+      }
+      .hero-fade-3 {
+        opacity: 0;
+        animation: heroFade 0.85s ease-out 0.26s forwards;
+      }
+      .hero-fade-4 {
+        opacity: 0;
+        animation: heroFade 0.85s ease-out 0.34s forwards;
+      }
+      .hero-fade-5 {
+        opacity: 0;
+        animation: heroFade 0.85s ease-out 0.42s forwards;
+      }
+      @keyframes heroBgIn {
+        from {
+          opacity: 0;
+          transform: scale(1.04);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+      .hero-bg {
+        opacity: 0;
+        animation: heroBgIn 1.4s ease-out forwards;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
+    "react/": "https://esm.sh/react@^19.2.1/",
+    "react": "https://esm.sh/react@^19.2.1",
+    "recharts": "https://esm.sh/recharts@^3.5.1",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.10.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
