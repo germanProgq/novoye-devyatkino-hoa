@@ -4,6 +4,13 @@ import PublicTopbar from '../../components/public/PublicTopbar';
 import { INFO_LINKS } from './data';
 
 const ResidentLayout: React.FC = () => {
+  const linkClasses = (active: boolean) =>
+    `inline-flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl text-sm font-semibold transition ${
+      active
+        ? 'bg-white text-primary shadow-sm border border-[color:var(--color-info-border)]'
+        : 'bg-white/70 border border-[color:var(--color-info-border)] text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]'
+    }`;
+
   return (
     <div className="min-h-screen bg-[var(--color-sand)] text-[var(--color-ink)]">
       <PublicTopbar />
@@ -29,22 +36,33 @@ const ResidentLayout: React.FC = () => {
 
         <div className="bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)] rounded-2xl p-3 md:p-4 shadow-sm">
           <div className="flex flex-wrap gap-2">
-            {INFO_LINKS.map((link) => (
-              <NavLink
-                key={link.slug}
-                to={`/informaciya/${link.slug}`}
-                className={({ isActive }) =>
-                  `inline-flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl text-sm font-semibold transition ${
-                    isActive
-                      ? 'bg-white text-primary shadow-sm border border-[color:var(--color-info-border)]'
-                      : 'bg-white/70 border border-[color:var(--color-info-border)] text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]'
-                  }`
-                }
-              >
-                <span className="material-symbols-outlined text-base">{link.icon}</span>
-                {link.label}
-              </NavLink>
-            ))}
+            {INFO_LINKS.map((link) => {
+              if (link.href) {
+                return (
+                  <a
+                    key={link.slug}
+                    href={link.href}
+                    target={link.target ?? '_blank'}
+                    rel="noreferrer noopener"
+                    className={linkClasses(false)}
+                  >
+                    <span className="material-symbols-outlined text-base">{link.icon}</span>
+                    {link.label}
+                  </a>
+                );
+              }
+
+              return (
+                <NavLink
+                  key={link.slug}
+                  to={`/informaciya/${link.slug}`}
+                  className={({ isActive }) => linkClasses(isActive)}
+                >
+                  <span className="material-symbols-outlined text-base">{link.icon}</span>
+                  {link.label}
+                </NavLink>
+              );
+            })}
           </div>
         </div>
 

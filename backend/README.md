@@ -51,5 +51,7 @@ Environment overrides (defaults shown) for backend container:
 
 - `GET /api/documents` – JSON list of documents with metadata, size, and download URLs.
 - `GET /api/documents/:id/download` – binary download of the requested document with the original filename.
+- `GET /api/contributions` – список взносов жильцов (POST для добавления), `.../parse` для подсказок по ФИО/квартире, `.../summary` для графиков.
+- `GET /api/debtors` – список должников (POST/PUT/DELETE для управления записями).
 
 CORS is open for GET/OPTIONS to simplify local frontend development.

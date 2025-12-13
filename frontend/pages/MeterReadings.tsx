@@ -4,11 +4,11 @@ import { MeterReading } from '../types';
 
 const historyData: MeterReading[] = [
   { id: 1, month: 'Май', hotWater: 5.2, coldWater: 8.1, electricity: 120, status: 'Принято' },
-  { id: 2, month: 'Июн', hotWater: 4.8, coldWater: 7.9, electricity: 115, status: 'Принято' },
-  { id: 3, month: 'Июл', hotWater: 3.5, coldWater: 6.5, electricity: 90, status: 'Принято' },
-  { id: 4, month: 'Авг', hotWater: 4.0, coldWater: 7.0, electricity: 95, status: 'Принято' },
-  { id: 5, month: 'Сен', hotWater: 5.5, coldWater: 8.5, electricity: 130, status: 'Принято' },
-  { id: 6, month: 'Окт', hotWater: 6.1, coldWater: 9.0, electricity: 145, status: 'Принято' },
+  { id: 2, month: 'Июнь', hotWater: 4.8, coldWater: 7.9, electricity: 115, status: 'Принято' },
+  { id: 3, month: 'Июль', hotWater: 3.5, coldWater: 6.5, electricity: 90, status: 'Принято' },
+  { id: 4, month: 'Август', hotWater: 4.0, coldWater: 7.0, electricity: 95, status: 'Принято' },
+  { id: 5, month: 'Сентябрь', hotWater: 5.5, coldWater: 8.5, electricity: 130, status: 'Принято' },
+  { id: 6, month: 'Октябрь', hotWater: 6.1, coldWater: 9.0, electricity: 145, status: 'Принято' },
 ];
 
 const MeterReadings: React.FC = () => {
@@ -100,7 +100,7 @@ const MeterReadings: React.FC = () => {
             <h3 className="font-bold text-[var(--color-ink)]">Динамика потребления (Электричество)</h3>
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={200}>
               <AreaChart data={historyData}>
                 <defs>
                   <linearGradient id="colorElec" x1="0" y1="0" x2="0" y2="1">

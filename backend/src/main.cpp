@@ -5,9 +5,11 @@
 #include <string>
 
 #include "context.h"
+#include "contributions.h"
 #include "db.h"
 #include "documents.h"
 #include "httplib.h"
+#include "news.h"
 
 namespace fs = std::filesystem;
 
@@ -40,7 +42,7 @@ std::optional<fs::path> resolve_documents_root(const fs::path& exec_path) {
 
 void add_cors_headers(httplib::Response& res) {
   res.set_header("Access-Control-Allow-Origin", "*");
-  res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.set_header("Access-Control-Allow-Headers", "Content-Type");
 }
 
@@ -56,6 +58,7 @@ int main(int argc, char** argv) {
 
   AppContext ctx;
   ctx.files_dir = *docs_root / "files";
+  ctx.news_dir = ctx.files_dir / "news";
   if (!file_exists(ctx.files_dir)) {
     std::cerr << "[error] Documents directory is missing: " << ctx.files_dir << "\n";
     return 1;
@@ -92,6 +95,12 @@ int main(int argc, char** argv) {
   // Primary documents API under /documents; keep /api/documents for backward compatibility.
   register_document_routes(server, ctx, "/documents");
   register_document_routes(server, ctx, "/api/documents");
+  register_news_routes(server, ctx, "/news");
+  register_news_routes(server, ctx, "/api/news");
+  register_contribution_routes(server, ctx, "/contributions");
+  register_contribution_routes(server, ctx, "/api/contributions");
+  register_debtor_routes(server, ctx, "/debtors");
+  register_debtor_routes(server, ctx, "/api/debtors");
 
   const int port = []() {
     if (const char* env = std::getenv("PORT")) {
@@ -104,6 +113,7 @@ int main(int argc, char** argv) {
   }();
 
   std::cout << "[info] Documents served from " << ctx.files_dir << "\n";
+  std::cout << "[info] News assets stored at " << ctx.news_dir << "\n";
   std::cout << "[info] DB host=" << ctx.db.host << " port=" << ctx.db.port << " db=" << ctx.db.name << "\n";
   std::cout << "[info] Starting server on http://0.0.0.0:" << port << "\n";
   server.listen("0.0.0.0", port);

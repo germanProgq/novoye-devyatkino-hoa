@@ -34,3 +34,57 @@ INSERT INTO documents (id, filename, title, category, description, year) VALUES
 ('management-contract-template', 'c50.doc', 'Договор управления многоквартирным домом (шаблон)', 'Договор управления', 'Шаблон договора управления многоквартирным домом для ООО «УК «ЖилКом».', NULL),
 ('paid-services-price-2011', 'd26.xls', 'Перечень и стоимость платных услуг (2011)', 'Цены', 'Прайс-лист на платные услуги для населения, утвержденный ООО «Управляющая компания «ЖилКом» в 2011 году.', 2011)
 ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS news (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  tag TEXT NOT NULL,
+  image_filename TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO news (id, title, summary, tag, image_filename, created_at) VALUES
+('news-sample-1', 'Плановое отключение горячей воды', 'Подача горячей воды будет приостановлена с 15 по 17 ноября из-за профилактических работ на теплотрассе.', 'Важно', NULL, NOW() - INTERVAL '5 days'),
+('news-sample-2', 'Субботник во дворе', 'Приглашаем жильцов принять участие в субботнике. Инвентарь выдадим на месте, после работы — чай и выпечка.', 'Событие', NULL, NOW() - INTERVAL '3 days'),
+('news-sample-3', 'Ремонт лифта в 3 подъезде', 'Заменили тросы и панель управления. Лифт работает в штатном режиме.', 'Ремонт', NULL, NOW() - INTERVAL '1 day')
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS contributions (
+  id TEXT PRIMARY KEY,
+  person_input TEXT,
+  display_name TEXT NOT NULL,
+  normalized_name TEXT NOT NULL,
+  apartment TEXT,
+  houses TEXT[],
+  month TEXT NOT NULL,
+  amount NUMERIC(12, 2) NOT NULL,
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS contributions_normalized_idx ON contributions (normalized_name);
+
+CREATE TABLE IF NOT EXISTS debtors (
+  id TEXT PRIMARY KEY,
+  display_name TEXT,
+  normalized_name TEXT NOT NULL,
+  apartment TEXT,
+  houses TEXT[],
+  phone TEXT,
+  debt NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  note TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS debtors_normalized_idx ON debtors (normalized_name);
+
+INSERT INTO contributions (id, person_input, display_name, normalized_name, apartment, houses, month, amount, note, created_at) VALUES
+('contrib-sample-1', 'кв 14 ковалева 15/16', 'Ковалёва', 'ковалёва', '14', ARRAY['15','16'], 'Ноя', 4200.00, 'Безналичный перевод', NOW() - INTERVAL '2 days'),
+('contrib-sample-2', 'иванов кв8', 'Иванов', 'иванов', '8', ARRAY['75А'], 'Окт', 3800.50, 'Оплата содержания жилья', NOW() - INTERVAL '10 days')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO debtors (id, display_name, normalized_name, apartment, houses, phone, debt, note, updated_at) VALUES
+('debtor-sample-1', 'Петрова', 'петрова', '22', ARRAY['75А'], '+7 900 000-00-00', 5200.00, 'Планирует оплатить до конца месяца', NOW() - INTERVAL '1 day'),
+('debtor-sample-2', 'Ковалёва', 'ковалёва', '14', ARRAY['15','16'], '+7 911 111-11-11', 3100.00, 'Частичная оплата', NOW() - INTERVAL '3 days')
+ON CONFLICT (id) DO NOTHING;

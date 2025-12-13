@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import PlaceholderCard from '../../components/public/PlaceholderCard';
 
 export const ResidentServicesPage: React.FC = () => (
@@ -11,10 +11,24 @@ export const ResidentServicesPage: React.FC = () => (
 );
 
 export const ResidentTariffsPage: React.FC = () => (
-  <PlaceholderCard
-    title="Тарифы на коммунальные услуги"
-    description="Таблицы с тарифами и расчётными периодами будут опубликованы после сверки. Временно используйте ссылку на поставщика услуг."
-    caption="Публикация в процессе"
-    icon="receipt"
-  />
+  <TariffsPdfRedirect />
 );
+
+const TariffsPdfRedirect: React.FC = () => {
+  const pdfPath = '/images/tariffs/tarrifs.pdf';
+
+  useEffect(() => {
+    window.open(pdfPath, '_blank', 'noopener,noreferrer');
+  }, []);
+
+  return (
+    <PlaceholderCard
+      title="Тарифы на коммунальные услуги"
+      description="PDF с актуальными тарифами откроется в новой вкладке. Если не открылся автоматически, воспользуйтесь ссылкой ниже."
+      caption="Документ доступен"
+      icon="receipt"
+      linkHref={pdfPath}
+      linkLabel="Открыть PDF с тарифами"
+    />
+  );
+};

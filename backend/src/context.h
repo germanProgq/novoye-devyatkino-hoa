@@ -15,6 +15,7 @@ struct DbConfig {
 
 struct AppContext {
   std::filesystem::path files_dir;
+  std::filesystem::path news_dir;
   DbConfig db;
   std::unordered_set<std::string> hidden_ids;
 };
