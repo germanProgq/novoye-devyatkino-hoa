@@ -735,6 +735,22 @@ std::vector<std::string> get_request_array(const httplib::Request& req, const st
   return out;
 }
 
+bool parse_bool(const std::string& raw) {
+  const std::string value = to_lower_utf8(trim(raw));
+  return value == "1" || value == "true" || value == "yes" || value == "on";
+}
+
+bool get_request_flag(const httplib::Request& req, const std::string& key, const json& body_json) {
+  if (!body_json.is_null() && body_json.contains(key)) {
+    const auto& val = body_json.at(key);
+    if (val.is_boolean()) return val.get<bool>();
+    if (val.is_string()) return parse_bool(val.get<std::string>());
+    if (val.is_number()) return val.get<double>() != 0.0;
+  }
+  if (req.has_param(key)) return parse_bool(req.get_param_value(key));
+  return false;
+}
+
 double parse_amount(const std::string& raw) {
   try {
     return std::stod(raw);
@@ -969,6 +985,7 @@ void register_contribution_routes(httplib::Server& server, AppContext& ctx, cons
     if (!houses_override.empty()) parsed.houses = houses_override;
     const std::string apartment = get_request_value(req, "apartment", body_json);
     if (!apartment.empty()) parsed.apartment = apartment;
+    const bool force_new_person = get_request_flag(req, "forceNew", body_json) || get_request_flag(req, "skipAutofill", body_json);
 
     const std::string amount_raw = get_request_value(req, "amount", body_json);
     const double amount = parse_amount(amount_raw);
@@ -983,13 +1000,15 @@ void register_contribution_routes(httplib::Server& server, AppContext& ctx, cons
     const std::string note = get_request_value(req, "note", body_json);
 
     // Fill missing details from history if possible.
-    const auto known = load_known_people(ctx);
-    for (const auto& k : known) {
-      if (!parsed.normalized_name.empty() && k.normalized_name == parsed.normalized_name) {
-        if (parsed.houses.empty()) parsed.houses = k.houses;
-        if (!parsed.apartment && k.apartment) parsed.apartment = k.apartment;
-        if (parsed.display_name.empty()) parsed.display_name = k.display_name;
-        break;
+    if (!force_new_person) {
+      const auto known = load_known_people(ctx);
+      for (const auto& k : known) {
+        if (!parsed.normalized_name.empty() && k.normalized_name == parsed.normalized_name) {
+          if (parsed.houses.empty()) parsed.houses = k.houses;
+          if (!parsed.apartment && k.apartment) parsed.apartment = k.apartment;
+          if (parsed.display_name.empty()) parsed.display_name = k.display_name;
+          break;
+        }
       }
     }
 
