@@ -199,6 +199,13 @@ a {
   pointer-events: none;
 }
 
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible,
+.recharts-surface:focus,
+.recharts-surface:focus-visible {
+  outline: none;
+}
+
 .page-loader__content {
   display: flex;
   flex-direction: column;

@@ -121,6 +121,41 @@ const normalizeMonthLabel = (label: string) => {
   return label || '—';
 };
 
+const buildRecentMonths = (count: number) => {
+  const now = new Date();
+  const months: string[] = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const point = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const label = FULL_MONTHS[point.getMonth()];
+    if (label) months.push(label);
+  }
+  return months;
+};
+
+const buildRecentMonthsWindow = (availableMonths: string[], limit = 12) => {
+  const now = new Date();
+  const nowIdx = now.getMonth(); // 0-11
+  const unique = Array.from(new Set(availableMonths.map((m) => normalizeMonthLabel(m)).filter(Boolean)));
+  const monthIndices = unique
+    .map((m) => monthOrder.indexOf(m))
+    .filter((idx) => idx >= 0 && idx < 12);
+
+  if (monthIndices.length === 0) {
+    return buildRecentMonths(limit);
+  }
+
+  const diffs = monthIndices.map((idx) => ((nowIdx - idx + 12) % 12));
+  const maxDiff = Math.min(Math.max(...diffs), limit - 1);
+  const windowLength = Math.min(limit, maxDiff + 1);
+
+  const windowMonths: string[] = [];
+  for (let i = windowLength - 1; i >= 0; i -= 1) {
+    const idx = (nowIdx - i + 12) % 12;
+    windowMonths.push(monthOrder[idx]);
+  }
+  return windowMonths;
+};
+
 const formatDateWithFullMonth = (raw?: string) => {
   if (!raw) return '';
   const date = new Date(raw);
@@ -223,6 +258,11 @@ type ContributionFormState = {
   note: string;
 };
 
+type NewContributionDetails = {
+  house: string;
+  apartment: string;
+};
+
 type DebtorFormState = {
   houseId: string;
   name: string;
@@ -307,6 +347,10 @@ const Admin: React.FC = () => {
   });
   const [contributionSuggestions, setContributionSuggestions] = useState<ContributionSuggestion[]>([]);
   const [selectedContribution, setSelectedContribution] = useState<ContributionSuggestion | null>(null);
+  const [newContributionDetails, setNewContributionDetails] = useState<NewContributionDetails>({
+    house: '',
+    apartment: '',
+  });
   const [contributionError, setContributionError] = useState<string | null>(null);
   const [contributionLoading, setContributionLoading] = useState(false);
   const [parsingInput, setParsingInput] = useState(false);
@@ -318,6 +362,8 @@ const Admin: React.FC = () => {
   const newsSectionRef = useRef<HTMLDivElement | null>(null);
   const cashflowChartRef = useRef<HTMLDivElement | null>(null);
   const [cashflowChartSize, setCashflowChartSize] = useState({ width: 0, height: 0 });
+  const debtUpdateTimers = useRef<Record<string, number>>({});
+  const pendingDebtUpdates = useRef<Record<string, number>>({});
   const loadNewsCount = useCallback(async (fallbackCount?: number) => {
     const endpoints = ['/api/news/count', '/news/count'];
     for (const path of endpoints) {
@@ -457,6 +503,21 @@ const Admin: React.FC = () => {
     };
     loadNews();
   }, [loadNewsCount]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      const pendingIds = Object.keys(pendingDebtUpdates.current);
+      if (pendingIds.length === 0) return;
+      pendingIds.forEach((id) => {
+        const amount = pendingDebtUpdates.current[id];
+        const body = new Blob([JSON.stringify({ debt: amount })], { type: 'application/json' });
+        navigator.sendBeacon(`${API_BASE_URL}/api/debtors/${id}`, body);
+      });
+      delete event.returnValue;
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   useEffect(() => {
     const state = location.state as AdminNavigationState | null;
@@ -643,6 +704,19 @@ const Admin: React.FC = () => {
     };
   }, [contributionForm.personInput, suppressSuggestions]);
 
+  const isNewContribution = useMemo(() => {
+    const hasInput = contributionForm.personInput.trim().length > 0;
+    if (selectedContribution?.source === 'ввод') return true;
+    if (!selectedContribution && contributionSuggestions.length === 0 && hasInput) return true;
+    return false;
+  }, [contributionForm.personInput, contributionSuggestions.length, selectedContribution]);
+
+  useEffect(() => {
+    if (!isNewContribution) {
+      setNewContributionDetails({ house: '', apartment: '' });
+    }
+  }, [isNewContribution]);
+
   useEffect(() => {
     const el = cashflowChartRef.current;
     if (!el) return;
@@ -714,30 +788,40 @@ const Admin: React.FC = () => {
 
   const chartData = useMemo(() => {
     const totalDebt = debtors.reduce((sum, r) => sum + Math.max(r.debt, 0), 0);
-    const base = contributionSummary.byMonth.length > 0
-      ? contributionSummary.byMonth.map((row) => ({
-          month: normalizeMonthLabel(row.month),
-          collected: row.collected,
-          debt: totalDebt,
-        }))
-      : baseCashflow.map((item) => ({ ...item, debt: totalDebt || item.debt }));
+    const normalizeMonthKey = (m: string) => normalizeMonthLabel(m);
 
-    const monthRank = (m: string) => {
-      const normalized = normalizeMonthLabel(m);
-      return monthOrder.indexOf(normalized);
-    };
-    return base
-      .map((row) => ({
-        ...row,
-        month: normalizeMonthLabel(row.month),
-        debt: typeof row.debt === 'number' ? row.debt : totalDebt,
-      }))
-      .sort((a, b) => {
-        const ai = monthRank(a.month);
-        const bi = monthRank(b.month);
-        if (ai === -1 || bi === -1) return 0;
-        return ai - bi;
+    const collectMap = (rows: { month: string; collected: number }[]) => {
+      const map = new Map<string, number>();
+      rows.forEach((row) => {
+        const key = normalizeMonthKey(row.month);
+        const value = Number.isFinite(row.collected) ? row.collected : 0;
+        map.set(key, (map.get(key) || 0) + value);
       });
+      return map;
+    };
+
+    const summaryRows = contributionSummary.byMonth.map((row) => ({
+      month: normalizeMonthKey(row.month),
+      collected: row.collected,
+    }));
+    const baseRows = baseCashflow.map((row) => ({
+      month: normalizeMonthKey(row.month),
+      collected: row.collected,
+    }));
+
+    const hasSummary = contributionSummary.byMonth.length > 0;
+    const sourceRows = hasSummary ? summaryRows : baseRows;
+    const sourceMap = collectMap(sourceRows);
+    const windowMonths = buildRecentMonthsWindow(sourceRows.map((row) => row.month), 12);
+
+    return windowMonths.map((month) => {
+      const collected = sourceMap.get(month) ?? 0;
+      return {
+        month,
+        collected,
+        debt: totalDebt,
+      };
+    });
   }, [contributionSummary.byMonth, debtors]);
 
   const hasCashflowSpace = cashflowChartSize.width > 0 && cashflowChartSize.height > 0;
@@ -755,7 +839,26 @@ const Admin: React.FC = () => {
     return first;
   };
 
-  const handleDebtChange = async (id: string, rawAmount: string) => {
+  const flushDebtUpdate = useCallback(
+    async (id: string) => {
+      const amount = pendingDebtUpdates.current[id];
+      if (amount === undefined) return;
+      delete pendingDebtUpdates.current[id];
+      try {
+        await fetch(`${API_BASE_URL}/api/debtors/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ debt: amount }),
+        });
+      } catch (err) {
+        console.error(err);
+        setDebtorError('Не удалось обновить долг');
+      }
+    },
+    []
+  );
+
+  const handleDebtChange = (id: string, rawAmount: string) => {
     setDebtorDebtInputs((prev) => ({ ...prev, [id]: rawAmount }));
 
     if (!rawAmount.trim()) return;
@@ -769,16 +872,15 @@ const Admin: React.FC = () => {
       prev.map((r) => (r.id === id ? { ...r, debt: normalizedAmount } : r))
     );
     setDebtorDebtInputs((prev) => ({ ...prev, [id]: String(normalizedAmount) }));
-    try {
-      await fetch(`${API_BASE_URL}/api/debtors/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ debt: normalizedAmount }),
-      });
-    } catch (err) {
-      console.error(err);
-      setDebtorError('Не удалось обновить долг');
+
+    pendingDebtUpdates.current[id] = normalizedAmount;
+    if (debtUpdateTimers.current[id]) {
+      window.clearTimeout(debtUpdateTimers.current[id]);
     }
+    debtUpdateTimers.current[id] = window.setTimeout(() => {
+      delete debtUpdateTimers.current[id];
+      flushDebtUpdate(id);
+    }, 650);
   };
 
   const handleDebtorRemove = async (id: string) => {
@@ -859,8 +961,13 @@ const Admin: React.FC = () => {
   const handleContributionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsedAmount = parseMoneyInput(contributionForm.amount);
+    const manualHouse = newContributionDetails.house.trim();
+    const manualApartment = newContributionDetails.apartment.trim();
+    const hasManualHouse = manualHouse.length > 0;
+    const hasManualApartment = manualApartment.length > 0;
+    const trimmedInput = contributionForm.personInput.trim();
 
-    if ((!contributionForm.personInput.trim() && !selectedContribution) || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    if ((!trimmedInput && !selectedContribution) || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       setContributionError('Заполните ФИО и сумму');
       return;
     }
@@ -869,7 +976,7 @@ const Admin: React.FC = () => {
     setContributionLoading(true);
 
     const payload: Record<string, unknown> = {
-      input: contributionForm.personInput.trim(),
+      input: trimmedInput,
       month: contributionForm.month,
       amount: parsedAmount,
       note: contributionForm.note.trim(),
@@ -877,8 +984,24 @@ const Admin: React.FC = () => {
 
     if (selectedContribution) {
       payload.displayName = selectedContribution.displayName;
-      if (selectedContribution.apartment) payload.apartment = selectedContribution.apartment;
-      if (selectedContribution.houses?.length) payload.houses = selectedContribution.houses;
+      if (isNewContribution) {
+        payload.forceNew = true;
+        const housesFromSelection = Array.isArray(selectedContribution.houses) ? selectedContribution.houses.filter((h) => h && h.trim()) : [];
+        const resolvedHouses = hasManualHouse ? [manualHouse] : housesFromSelection;
+        const resolvedApartment = hasManualApartment ? manualApartment : (selectedContribution.apartment ?? '');
+        if (resolvedHouses.length) payload.houses = resolvedHouses;
+        if (resolvedApartment) payload.apartment = resolvedApartment;
+      } else {
+        if (selectedContribution.apartment) payload.apartment = selectedContribution.apartment;
+        if (selectedContribution.houses?.length) payload.houses = selectedContribution.houses;
+      }
+    } else if (isNewContribution) {
+      payload.displayName = trimmedInput;
+      payload.forceNew = true;
+      if (hasManualHouse) payload.houses = [manualHouse];
+      if (hasManualApartment) payload.apartment = manualApartment;
+    } else if (trimmedInput) {
+      payload.displayName = trimmedInput;
     }
 
     try {
@@ -895,6 +1018,7 @@ const Admin: React.FC = () => {
       setContributionForm((prev) => ({ ...prev, amount: '', personInput: '', note: '' }));
       setContributionSuggestions([]);
       setSelectedContribution(null);
+      setNewContributionDetails({ house: '', apartment: '' });
       setSuppressSuggestions(true);
     } catch (err) {
       console.error(err);
@@ -1305,6 +1429,11 @@ const Admin: React.FC = () => {
                     ? (
                       <>
                         Распознано: {selectedContribution.displayName}
+                        {isNewContribution && (
+                          <span className="px-2 py-0.5 rounded-full bg-white border border-[color:var(--color-info-border)] text-[var(--color-ink)]">
+                            Новый плательщик
+                          </span>
+                        )}
                         {selectedContribution.apartment && <span className="px-2 py-0.5 rounded-full bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">Кв. {selectedContribution.apartment}</span>}
                         {selectedContribution.houses?.length > 0 && (
                           <span className="px-2 py-0.5 rounded-full bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
@@ -1352,6 +1481,30 @@ const Admin: React.FC = () => {
                         </div>
                       </button>
                     ))}
+                  </div>
+                )}
+                {isNewContribution && (
+                  <div className="p-3 rounded-lg border border-[color:var(--color-info-border)] bg-[var(--color-info-surface)] space-y-2">
+                    <div className="text-xs text-[var(--color-ink-soft)] flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary text-base">person_add</span>
+                      Укажите дом и/или квартиру, чтобы сохранить нового плательщика (необязательно).
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={newContributionDetails.house}
+                        onChange={(e) => setNewContributionDetails((prev) => ({ ...prev, house: e.target.value }))}
+                        className="w-full h-11 border border-[color:var(--color-info-border)] rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white text-[var(--color-ink)]"
+                        placeholder="Дом или корпус (опционально)"
+                      />
+                      <input
+                        type="text"
+                        value={newContributionDetails.apartment}
+                        onChange={(e) => setNewContributionDetails((prev) => ({ ...prev, apartment: e.target.value }))}
+                        className="w-full h-11 border border-[color:var(--color-info-border)] rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white text-[var(--color-ink)]"
+                        placeholder="Квартира (опционально)"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
