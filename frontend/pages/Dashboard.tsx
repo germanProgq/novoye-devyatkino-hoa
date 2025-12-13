@@ -3,11 +3,11 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 
 const data = [
   { name: 'Май', amount: 4500 },
-  { name: 'Июн', amount: 3200 },
-  { name: 'Июл', amount: 2800 },
-  { name: 'Авг', amount: 2900 },
-  { name: 'Сен', amount: 4100 },
-  { name: 'Окт', amount: 5200 },
+  { name: 'Июнь', amount: 3200 },
+  { name: 'Июль', amount: 2800 },
+  { name: 'Август', amount: 2900 },
+  { name: 'Сентябрь', amount: 4100 },
+  { name: 'Октябрь', amount: 5200 },
 ];
 
 const Dashboard: React.FC = () => {
@@ -34,7 +34,7 @@ const Dashboard: React.FC = () => {
         <div className="bg-[var(--color-info-surface)] p-6 rounded-xl border border-[color:var(--color-info-border)] shadow-sm flex items-start justify-between backdrop-blur-sm">
           <div>
             <p className="text-sm font-medium text-[var(--color-ink-soft)]">След. платеж</p>
-            <h3 className="text-2xl font-bold text-[var(--color-ink)] mt-1">25 Ноя</h3>
+            <h3 className="text-2xl font-bold text-[var(--color-ink)] mt-1">25 ноября</h3>
             <span className="text-xs text-[var(--color-ink-soft)] mt-2 inline-block">Ожидается квитанция</span>
           </div>
           <div className="p-3 bg-accent/20 text-accent rounded-lg border border-[color:var(--color-info-border)]">
@@ -66,7 +66,7 @@ const Dashboard: React.FC = () => {
             </select>
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={200}>
               <BarChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(175, 194, 215, 0.6)" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#3b4a3b', fontSize: 12}} dy={10} />
@@ -86,10 +86,10 @@ const Dashboard: React.FC = () => {
           <h3 className="font-semibold text-[var(--color-ink)] mb-4">Последние события</h3>
           <div className="space-y-4">
             {[
-              { title: 'Оплата квитанции за Октябрь', date: '28 Окт, 10:42', amount: '-5,200 ₽', icon: 'payments', color: 'text-primary', bg: 'bg-primary/10' },
-              { title: 'Передача показаний (Вода)', date: '24 Окт, 18:30', icon: 'water_drop', color: 'text-accent', bg: 'bg-accent/20' },
-              { title: 'Создана заявка #124', date: '15 Окт, 09:15', icon: 'confirmation_number', color: 'text-primary', bg: 'bg-primary/10' },
-              { title: 'Собрание жильцов', date: '10 Окт, 19:00', icon: 'groups', color: 'text-primary', bg: 'bg-primary/10' },
+              { title: 'Оплата квитанции за Октябрь', date: '28 октября, 10:42', amount: '-5,200 ₽', icon: 'payments', color: 'text-primary', bg: 'bg-primary/10' },
+              { title: 'Передача показаний (Вода)', date: '24 октября, 18:30', icon: 'water_drop', color: 'text-accent', bg: 'bg-accent/20' },
+              { title: 'Создана заявка #124', date: '15 октября, 09:15', icon: 'confirmation_number', color: 'text-primary', bg: 'bg-primary/10' },
+              { title: 'Собрание жильцов', date: '10 октября, 19:00', icon: 'groups', color: 'text-primary', bg: 'bg-primary/10' },
             ].map((item, index) => (
               <div key={index} className="flex items-center gap-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${item.bg} ${item.color}`}>

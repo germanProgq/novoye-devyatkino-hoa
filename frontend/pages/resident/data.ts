@@ -2,11 +2,13 @@ export type InfoLink = {
   slug: string;
   label: string;
   icon: string;
+  href?: string;
+  target?: '_blank' | '_self' | '_parent' | '_top';
 };
 
 export const INFO_LINKS: InfoLink[] = [
   { slug: 'poryadok-uslug', label: 'Порядок оказания услуг', icon: 'rule' },
-  { slug: 'tarify', label: 'Тарифы на коммунальные услуги', icon: 'receipt' },
+  { slug: 'tarify', label: 'Тарифы на коммунальные услуги', icon: 'receipt', href: '/images/tariffs/tarrifs.pdf', target: '_blank' },
   { slug: 'poleznye-telefony', label: 'Полезные телефоны', icon: 'call' },
   { slug: 'poleznye-sayty', label: 'Полезные сайты', icon: 'public' },
   { slug: 'kontakty-tszh', label: 'Контакты ТСЖ', icon: 'apartment' },

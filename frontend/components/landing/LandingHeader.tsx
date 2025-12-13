@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+type NavChild = { label: string; href: string; target?: '_blank' | '_self' | '_parent' | '_top' };
+
 type NavItem =
   | { id: string; label: string; href: string; type: 'anchor' }
   | { id: string; label: string; href: string; type: 'route' }
-  | { id: string; label: string; href: string; type: 'group'; children: { label: string; href: string }[] };
+  | { id: string; label: string; href: string; type: 'group'; children: NavChild[] };
 
 const NAV_ITEMS: NavItem[] = [
   {
@@ -28,7 +30,7 @@ const NAV_ITEMS: NavItem[] = [
     type: 'group',
     children: [
       { label: 'Порядок оказания услуг', href: '/informaciya/poryadok-uslug' },
-      { label: 'Тарифы на коммунальные услуги', href: '/informaciya/tarify' },
+      { label: 'Тарифы на коммунальные услуги', href: '/images/tariffs/tarrifs.pdf', target: '_blank' },
       { label: 'Полезные телефоны', href: '/informaciya/poleznye-telefony' },
       { label: 'Полезные сайты', href: '/informaciya/poleznye-sayty' },
       { label: 'Контакты ТСЖ', href: '/informaciya/kontakty-tszh' },
@@ -240,16 +242,36 @@ const LandingHeader: React.FC = () => {
                     onMouseLeave={scheduleClose}
                   >
                     <div className="p-2 space-y-1">
-                      {item.children.map((child) => (
-                        <Link
-                          key={child.href}
-                          to={child.href}
-                          className="group flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold text-[var(--color-ink)] hover:bg-[var(--color-info-surface)] hover:text-accent transition"
-                        >
-                          <span>{child.label}</span>
-                          <span className="material-symbols-outlined text-base text-[var(--color-ink-soft)] group-hover:text-accent">arrow_outward</span>
-                        </Link>
-                      ))}
+                      {item.children.map((child) => {
+                        const linkClasses =
+                          'group flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold text-[var(--color-ink)] hover:bg-[var(--color-info-surface)] hover:text-accent transition';
+
+                        if (child.target === '_blank') {
+                          return (
+                            <a
+                              key={child.href}
+                              href={child.href}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className={linkClasses}
+                            >
+                              <span>{child.label}</span>
+                              <span className="material-symbols-outlined text-base text-[var(--color-ink-soft)] group-hover:text-accent">open_in_new</span>
+                            </a>
+                          );
+                        }
+
+                        return (
+                          <Link
+                            key={child.href}
+                            to={child.href}
+                            className={linkClasses}
+                          >
+                            <span>{child.label}</span>
+                            <span className="material-symbols-outlined text-base text-[var(--color-ink-soft)] group-hover:text-accent">arrow_outward</span>
+                          </Link>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -360,17 +382,33 @@ const LandingHeader: React.FC = () => {
                     }`}
                   >
                     {item.children.map((child) => (
-                      <Link
-                        key={child.href}
-                        to={child.href}
-                        className={`flex items-center justify-between px-4 py-2 text-sm font-semibold transition ${childTone}`}
-                        onClick={closeMobileMenu}
-                      >
-                        <span>{child.label}</span>
-                        <span className={`material-symbols-outlined text-base ${pastHero || isMobile ? 'text-[var(--color-ink-soft)]' : 'text-white/80'}`}>
-                          arrow_outward
-                        </span>
-                      </Link>
+                      child.target === '_blank' ? (
+                        <a
+                          key={child.href}
+                          href={child.href}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className={`flex items-center justify-between px-4 py-2 text-sm font-semibold transition ${childTone}`}
+                          onClick={closeMobileMenu}
+                        >
+                          <span>{child.label}</span>
+                          <span className={`material-symbols-outlined text-base ${pastHero || isMobile ? 'text-[var(--color-ink-soft)]' : 'text-white/80'}`}>
+                            open_in_new
+                          </span>
+                        </a>
+                      ) : (
+                        <Link
+                          key={child.href}
+                          to={child.href}
+                          className={`flex items-center justify-between px-4 py-2 text-sm font-semibold transition ${childTone}`}
+                          onClick={closeMobileMenu}
+                        >
+                          <span>{child.label}</span>
+                          <span className={`material-symbols-outlined text-base ${pastHero || isMobile ? 'text-[var(--color-ink-soft)]' : 'text-white/80'}`}>
+                            arrow_outward
+                          </span>
+                        </Link>
+                      )
                     ))}
                   </div>
                 </div>
