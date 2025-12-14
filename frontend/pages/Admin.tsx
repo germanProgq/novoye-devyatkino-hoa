@@ -11,6 +11,9 @@ import {
   DocumentItem,
   NewsItem,
   MeterRecord,
+  RequestItem,
+  RequestStatus,
+  RequestComment,
 } from '../types';
 
 type Building = {
@@ -332,26 +335,8 @@ type DebtorFormState = {
   note: string;
 };
 
-type RequestStatus = 'new' | 'in_progress' | 'resolved';
-
-type AdminRequestComment = {
-  id: string;
-  text: string;
-  createdAt: string;
-  kind: 'reopen' | 'note';
-};
-
-type AdminRequest = {
-  id: string;
-  title: string;
-  category: string;
-  description: string;
-  fullName?: string;
-  status: RequestStatus;
-  createdAt: string;
-  updatedAt: string;
-  comments?: AdminRequestComment[];
-};
+type AdminRequestComment = RequestComment;
+type AdminRequest = RequestItem;
 
 type AdminNavigationState = {
   editNewsId?: string;
@@ -387,7 +372,6 @@ const normalizeAdminTab = (value?: string | null): AdminTab => {
   return tab ? tab.id : 'overview';
 };
 
-const REQUEST_STORAGE_KEY = 'hoa-requests-v1';
 const requestStatusMeta: Record<RequestStatus, { label: string; color: string; bg: string; icon: string }> = {
   new: { label: 'Новое', color: 'text-primary', bg: 'bg-primary/10', icon: 'fiber_new' },
   in_progress: { label: 'В работе', color: 'text-[var(--color-ink)]', bg: 'bg-amber-100', icon: 'build' },
@@ -398,74 +382,25 @@ const adminCommentKindLabel: Record<AdminRequestComment['kind'], string> = {
   note: 'Комментарий администратора',
 };
 
-const seedAdminRequests: AdminRequest[] = [
-  {
-    id: 'req-1',
-    title: 'Шум в подъезде по вечерам',
-    category: 'Общее имущество',
-    description: 'После 22:00 регулярно слышен шум со второго этажа. Просьба разобраться с нарушителями тишины.',
-    fullName: 'Иван Петров',
-    status: 'in_progress',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 20).toISOString(),
-    comments: [],
-  },
-  {
-    id: 'req-2',
-    title: 'Нет света в подъезде',
-    category: 'Инженерные системы',
-    description: 'Перегорела лампочка у лифта на 5 этаже, вечером очень темно.',
-    fullName: 'Марина Соколова',
-    status: 'in_progress',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
-    comments: [],
-  },
-  {
-    id: 'req-3',
-    title: 'Заявка на замену счетчика воды',
-    category: 'Счетчики',
-    description: 'Нужно заменить счетчик холодной воды в квартире 54, срок поверки истек.',
-    fullName: 'Александр Смирнов',
-    status: 'resolved',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 12).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-    comments: [
-      {
-        id: 'c-1',
-        text: 'Исполнено, счетчик заменен 12.03',
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-        kind: 'note',
-      },
-    ],
-  },
-];
+const mapApiAdminRequestComment = (raw: any): AdminRequestComment => ({
+  id: raw?.id ?? `c-${Math.random().toString(36).slice(2)}`,
+  text: raw?.text ?? '',
+  createdAt: raw?.createdAt || raw?.created_at || raw?.date || '',
+  kind: raw?.kind === 'reopen' ? 'reopen' : 'note',
+});
 
-const loadAdminRequests = (): AdminRequest[] => {
-  if (typeof window === 'undefined') return seedAdminRequests;
-  try {
-    const raw = localStorage.getItem(REQUEST_STORAGE_KEY);
-    if (!raw) return seedAdminRequests;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return seedAdminRequests;
-    return parsed.map((item: any) => ({
-      ...item,
-      fullName: item.fullName || item.fio || '',
-      status: item.status === 'resolved' ? 'resolved' : item.status === 'in_progress' ? 'in_progress' : 'new',
-      comments: Array.isArray(item.comments)
-        ? item.comments.map((c: any) => ({
-            id: c.id || `c-${Math.random().toString(36).slice(2)}`,
-            text: c.text || '',
-            createdAt: c.createdAt || c.date || new Date().toISOString(),
-            kind: c.kind === 'note' ? 'note' : 'reopen',
-          }))
-        : [],
-    }));
-  } catch (err) {
-    console.error('Failed to load requests from storage', err);
-    return seedAdminRequests;
-  }
-};
+const mapApiAdminRequest = (raw: any): AdminRequest => ({
+  id: raw?.id ?? '',
+  username: raw?.username || raw?.user || '',
+  title: raw?.title ?? '',
+  category: raw?.category || 'Общее',
+  description: raw?.description ?? '',
+  fullName: raw?.fullName || raw?.full_name || raw?.fio || '',
+  status: raw?.status === 'resolved' ? 'resolved' : raw?.status === 'in_progress' ? 'in_progress' : 'new',
+  createdAt: raw?.createdAt || raw?.created_at || '',
+  updatedAt: raw?.updatedAt || raw?.updated_at || raw?.createdAt || '',
+  comments: Array.isArray(raw?.comments) ? raw.comments.map(mapApiAdminRequestComment) : [],
+});
 
 const formatRequestDate = (value: string) => {
   const date = new Date(value);
@@ -574,7 +509,11 @@ const Admin: React.FC = () => {
   const [cashflowChartSize, setCashflowChartSize] = useState({ width: 0, height: 0 });
   const debtUpdateTimers = useRef<Record<string, number>>({});
   const pendingDebtUpdates = useRef<Record<string, number>>({});
-  const [adminRequests, setAdminRequests] = useState<AdminRequest[]>(() => loadAdminRequests());
+  const [adminRequests, setAdminRequests] = useState<AdminRequest[]>([]);
+  const [adminRequestsLoading, setAdminRequestsLoading] = useState(true);
+  const [adminRequestsError, setAdminRequestsError] = useState<string | null>(null);
+  const [requestMutations, setRequestMutations] = useState<Record<string, boolean>>({});
+  const [requestActionError, setRequestActionError] = useState<string | null>(null);
   const [adminRequestFilter, setAdminRequestFilter] = useState<'active' | 'resolved' | 'all'>('active');
   const [adminRequestSearch, setAdminRequestSearch] = useState('');
   const [adminReopenDrafts, setAdminReopenDrafts] = useState<Record<string, string>>({});
@@ -622,12 +561,6 @@ const Admin: React.FC = () => {
       setActiveTab(tabFromUrl);
     }
   }, [activeTab, location.search]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(REQUEST_STORAGE_KEY, JSON.stringify(adminRequests));
-  }, [adminRequests]);
-
   const mapApiDoc = (doc: any): DocumentItem => {
     const normalizedType = normalizeType(doc.type || '');
     const normalizedCategory = normalizeCategoryDisplay(doc.category || 'Общее');
@@ -722,6 +655,36 @@ const Admin: React.FC = () => {
       : [],
   });
 
+  const upsertAdminRequest = useCallback((updated: AdminRequest) => {
+    setAdminRequests((prev) => {
+      const idx = prev.findIndex((r) => r.id === updated.id);
+      if (idx === -1) return [updated, ...prev];
+      const next = [...prev];
+      next[idx] = updated;
+      return next;
+    });
+  }, []);
+
+  const loadAdminRequests = useCallback(async () => {
+    setAdminRequestsLoading(true);
+    setAdminRequestsError(null);
+    setRequestActionError(null);
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/requests`);
+      if (!response.ok) {
+        throw new Error(`API responded with ${response.status}`);
+      }
+      const payload = await response.json();
+      const list = Array.isArray(payload.requests) ? payload.requests : Array.isArray(payload) ? payload : [];
+      setAdminRequests(list.map(mapApiAdminRequest));
+    } catch (err) {
+      console.error(err);
+      setAdminRequestsError('Не удалось загрузить заявки');
+    } finally {
+      setAdminRequestsLoading(false);
+    }
+  }, []);
+
   const loadContributionSummary = async () => {
     try {
       const response = await apiFetch(`${API_BASE_URL}/api/contributions/summary`);
@@ -811,6 +774,10 @@ const Admin: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    void loadAdminRequests();
+  }, [loadAdminRequests]);
+
   const adminRequestCounts = useMemo(() => {
     const resolved = adminRequests.filter((item) => item.status === 'resolved').length;
     const active = adminRequests.length - resolved;
@@ -852,60 +819,85 @@ const Admin: React.FC = () => {
     );
   };
 
-  const updateAdminRequestStatus = (id: string, status: RequestStatus) => {
-    const now = new Date().toISOString();
-    setAdminRequests((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status, updatedAt: now } : item))
-    );
+  const updateAdminRequestStatus = async (id: string, status: RequestStatus) => {
+    setRequestActionError(null);
+    setRequestMutations((prev) => ({ ...prev, [id]: true }));
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/requests/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) throw new Error(`API responded with ${response.status}`);
+      const payload = await response.json();
+      const updated = mapApiAdminRequest(payload.request ?? payload);
+      upsertAdminRequest(updated);
+    } catch (err) {
+      console.error(err);
+      setRequestActionError('Не удалось обновить заявку');
+    } finally {
+      setRequestMutations((prev) => {
+        const copy = { ...prev };
+        delete copy[id];
+        return copy;
+      });
+    }
   };
 
-  const handleAdminReopen = (item: AdminRequest) => {
+  const handleAdminReopen = async (item: AdminRequest) => {
     const comment = (adminReopenDrafts[item.id] ?? '').trim();
     if (!comment) return;
-    const now = new Date().toISOString();
-    const entry: AdminRequestComment = {
-      id: `c-${Date.now()}`,
-      text: comment,
-      createdAt: now,
-      kind: 'reopen',
-    };
-    setAdminRequests((prev) =>
-      prev.map((req) =>
-        req.id === item.id
-          ? {
-              ...req,
-              status: 'in_progress',
-              updatedAt: now,
-              comments: [...(req.comments ?? []), entry],
-            }
-          : req,
-      ),
-    );
-    setAdminReopenDrafts((prev) => ({ ...prev, [item.id]: '' }));
+    setRequestActionError(null);
+    setRequestMutations((prev) => ({ ...prev, [item.id]: true }));
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/requests/${item.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: comment, kind: 'reopen' }),
+      });
+      if (!response.ok) throw new Error(`API responded with ${response.status}`);
+      const payload = await response.json();
+      const updated = mapApiAdminRequest(payload.request ?? payload);
+      upsertAdminRequest(updated);
+      setAdminReopenDrafts((prev) => ({ ...prev, [item.id]: '' }));
+    } catch (err) {
+      console.error(err);
+      setRequestActionError('Не удалось вернуть заявку в работу');
+    } finally {
+      setRequestMutations((prev) => {
+        const copy = { ...prev };
+        delete copy[item.id];
+        return copy;
+      });
+    }
   };
 
-  const handleAdminAddComment = (item: AdminRequest) => {
+  const handleAdminAddComment = async (item: AdminRequest) => {
     const comment = (adminCommentDrafts[item.id] ?? '').trim();
     if (!comment) return;
-    const now = new Date().toISOString();
-    const entry: AdminRequestComment = {
-      id: `c-${Date.now()}`,
-      text: comment,
-      createdAt: now,
-      kind: 'note',
-    };
-    setAdminRequests((prev) =>
-      prev.map((req) =>
-        req.id === item.id
-          ? {
-              ...req,
-              comments: [...(req.comments ?? []), entry],
-              updatedAt: now,
-            }
-          : req,
-      ),
-    );
-    setAdminCommentDrafts((prev) => ({ ...prev, [item.id]: '' }));
+    setRequestActionError(null);
+    setRequestMutations((prev) => ({ ...prev, [item.id]: true }));
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/requests/${item.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: comment, kind: 'note' }),
+      });
+      if (!response.ok) throw new Error(`API responded with ${response.status}`);
+      const payload = await response.json();
+      const updated = mapApiAdminRequest(payload.request ?? payload);
+      upsertAdminRequest(updated);
+      setAdminCommentDrafts((prev) => ({ ...prev, [item.id]: '' }));
+    } catch (err) {
+      console.error(err);
+      setRequestActionError('Не удалось добавить комментарий');
+    } finally {
+      setRequestMutations((prev) => {
+        const copy = { ...prev };
+        delete copy[item.id];
+        return copy;
+      });
+    }
   };
 
   useEffect(() => {
@@ -2630,6 +2622,13 @@ const Admin: React.FC = () => {
                   placeholder="Поиск по теме, категории или ФИО"
                   className="px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] bg-white text-sm text-[var(--color-ink)] focus:ring-primary/30 focus:border-primary w-full md:w-72"
                 />
+                <button
+                  onClick={() => void loadAdminRequests()}
+                  disabled={adminRequestsLoading}
+                  className="px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] bg-white text-sm font-semibold text-[var(--color-ink)] hover:bg-[var(--color-info-surface)] disabled:opacity-60"
+                >
+                  {adminRequestsLoading ? 'Обновляем...' : 'Обновить'}
+                </button>
               </div>
             </div>
 
@@ -2663,107 +2662,145 @@ const Admin: React.FC = () => {
           </div>
 
           <div className="space-y-3">
-            {adminFilteredRequests.length === 0 && (
+            {adminRequestsError && (
+              <div className="border border-[color:var(--color-info-border)] rounded-xl bg-red-50 px-6 py-4 text-sm text-[var(--color-ink)] flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-base text-accent">error</span>
+                  {adminRequestsError}
+                </div>
+                <button
+                  onClick={() => void loadAdminRequests()}
+                  className="text-primary font-semibold hover:text-accent"
+                >
+                  Повторить
+                </button>
+              </div>
+            )}
+            {requestActionError && !adminRequestsError && (
+              <div className="border border-[color:var(--color-info-border)] rounded-xl bg-amber-50 px-6 py-3 text-sm text-[var(--color-ink)] flex items-center gap-2">
+                <span className="material-symbols-outlined text-base text-amber-600">warning</span>
+                {requestActionError}
+              </div>
+            )}
+            {adminRequestsLoading && (
+              <div className="border border-[color:var(--color-info-border)] rounded-xl bg-[var(--color-info-surface)] px-6 py-5 text-[var(--color-ink-soft)]">
+                Загружаем заявки...
+              </div>
+            )}
+            {!adminRequestsLoading && adminFilteredRequests.length === 0 && (
               <div className="border border-[color:var(--color-info-border)] rounded-xl bg-[var(--color-info-surface)] px-6 py-5 text-[var(--color-ink-soft)]">
                 Нет заявок под выбранные фильтры.
               </div>
             )}
 
-            {adminFilteredRequests.map((item) => (
-              <div
-                key={item.id}
-                className="bg-white border border-[color:var(--color-info-border)] rounded-xl p-5 shadow-[0_10px_40px_-24px_rgba(0,0,0,0.25)]"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      {renderRequestStatusPill(item.status)}
-                      <span className="text-xs text-[var(--color-ink-soft)]">обновлено {formatRequestDate(item.updatedAt)}</span>
-                    </div>
-                    <h3 className="text-lg font-semibold text-[var(--color-ink)]">{item.title}</h3>
-                    <div className="text-sm text-primary font-medium">{item.category || 'Общее'}</div>
-                    <div className="text-sm text-[var(--color-ink-soft)]">ФИО: {item.fullName || '—'}</div>
-                  </div>
-                  <div className="text-xs text-[var(--color-ink-soft)]">Создано {formatRequestDate(item.createdAt)}</div>
-                </div>
-
-                <p className="text-sm text-[var(--color-ink-soft)] leading-relaxed mb-4">{item.description}</p>
-
-                <div className="flex flex-wrap gap-2 items-start justify-between">
-                  <div className="flex flex-wrap gap-2">
-                    {item.status === 'new' && (
-                      <button
-                        onClick={() => updateAdminRequestStatus(item.id, 'in_progress')}
-                        className="px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] text-sm font-medium hover:bg-[var(--color-info-surface)]"
-                      >
-                        Взять в работу
-                      </button>
-                    )}
-                    {item.status !== 'resolved' && (
-                      <button
-                        onClick={() => updateAdminRequestStatus(item.id, 'resolved')}
-                        className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 shadow-sm"
-                      >
-                        Отметить решенной
-                      </button>
-                    )}
-                    {item.status === 'resolved' && (
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
-                        <input
-                          value={adminReopenDrafts[item.id] ?? ''}
-                          onChange={(e) => setAdminReopenDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                          placeholder="Комментарий для возврата"
-                          className="flex-1 min-w-[220px] px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] bg-[var(--color-info-surface)] text-[var(--color-ink)] focus:ring-primary/30 focus:border-primary"
-                        />
-                        <button
-                          onClick={() => handleAdminReopen(item)}
-                          disabled={!(adminReopenDrafts[item.id] ?? '').trim()}
-                          className="px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] text-sm font-semibold hover:bg-[var(--color-info-surface)] disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                          Вернуть в работу
-                        </button>
+            {adminFilteredRequests.map((item) => {
+              const busy = requestMutations[item.id];
+              return (
+                <div
+                  key={item.id}
+                  className="bg-white border border-[color:var(--color-info-border)] rounded-xl p-5 shadow-[0_10px_40px_-24px_rgba(0,0,0,0.25)]"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        {renderRequestStatusPill(item.status)}
+                        <span className="text-xs text-[var(--color-ink-soft)]">обновлено {formatRequestDate(item.updatedAt)}</span>
+                        {busy && (
+                          <span className="text-xs text-primary inline-flex items-center gap-1">
+                            <span className="material-symbols-outlined text-sm">progress_activity</span>
+                            Сохраняем...
+                          </span>
+                        )}
                       </div>
-                    )}
+                      <h3 className="text-lg font-semibold text-[var(--color-ink)]">{item.title}</h3>
+                      <div className="text-sm text-primary font-medium">{item.category || 'Общее'}</div>
+                      <div className="text-sm text-[var(--color-ink-soft)]">ФИО: {item.fullName || '—'}</div>
+                    </div>
+                    <div className="text-xs text-[var(--color-ink-soft)]">Создано {formatRequestDate(item.createdAt)}</div>
                   </div>
-                </div>
 
-                <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2">
-                  <input
-                    value={adminCommentDrafts[item.id] ?? ''}
-                    onChange={(e) => setAdminCommentDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                    placeholder="Комментарий администратора (необязательно)"
-                    className="flex-1 min-w-[220px] px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] bg-[var(--color-info-surface)] text-[var(--color-ink)] focus:ring-primary/30 focus:border-primary"
-                  />
-                  <button
-                    onClick={() => handleAdminAddComment(item)}
-                    disabled={!(adminCommentDrafts[item.id] ?? '').trim()}
-                    className="px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] text-sm font-semibold hover:bg-[var(--color-info-surface)] disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    Добавить комментарий
-                  </button>
-                </div>
+                  <p className="text-sm text-[var(--color-ink-soft)] leading-relaxed mb-4">{item.description}</p>
 
-                {item.comments && item.comments.length > 0 && (
-                  <div className="mt-4 border-t border-[color:var(--color-info-border)] pt-3">
-                    <div className="text-xs font-semibold text-[var(--color-ink-soft)] mb-2">Комментарии</div>
-                    <div className="space-y-2">
-                      {item.comments.map((comment) => (
-                        <div
-                          key={comment.id}
-                          className="text-sm text-[var(--color-ink-soft)] bg-[var(--color-info-surface)] rounded-lg px-3 py-2"
+                  <div className="flex flex-wrap gap-2 items-start justify-between">
+                    <div className="flex flex-wrap gap-2">
+                      {item.status === 'new' && (
+                        <button
+                          onClick={() => void updateAdminRequestStatus(item.id, 'in_progress')}
+                          disabled={busy}
+                          className="px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] text-sm font-medium hover:bg-[var(--color-info-surface)] disabled:opacity-60"
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium text-[var(--color-ink)]">{adminCommentKindLabel[comment.kind] ?? 'Комментарий'}</span>
-                            <span className="text-xs">{formatRequestDate(comment.createdAt)}</span>
-                          </div>
-                          <div className="mt-1 whitespace-pre-wrap">{comment.text}</div>
+                          Взять в работу
+                        </button>
+                      )}
+                      {item.status !== 'resolved' && (
+                        <button
+                          onClick={() => void updateAdminRequestStatus(item.id, 'resolved')}
+                          disabled={busy}
+                          className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 shadow-sm disabled:opacity-60"
+                        >
+                          Отметить решенной
+                        </button>
+                      )}
+                      {item.status === 'resolved' && (
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+                          <input
+                            value={adminReopenDrafts[item.id] ?? ''}
+                            onChange={(e) => setAdminReopenDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                            placeholder="Комментарий для возврата"
+                            disabled={busy}
+                            className="flex-1 min-w-[220px] px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] bg-[var(--color-info-surface)] text-[var(--color-ink)] focus:ring-primary/30 focus:border-primary disabled:opacity-60"
+                          />
+                          <button
+                            onClick={() => void handleAdminReopen(item)}
+                            disabled={busy || !(adminReopenDrafts[item.id] ?? '').trim()}
+                            className="px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] text-sm font-semibold hover:bg-[var(--color-info-surface)] disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            Вернуть в работу
+                          </button>
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                    <input
+                      value={adminCommentDrafts[item.id] ?? ''}
+                      onChange={(e) => setAdminCommentDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                      placeholder="Комментарий администратора (необязательно)"
+                      disabled={busy}
+                      className="flex-1 min-w-[220px] px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] bg-[var(--color-info-surface)] text-[var(--color-ink)] focus:ring-primary/30 focus:border-primary disabled:opacity-60"
+                    />
+                    <button
+                      onClick={() => void handleAdminAddComment(item)}
+                      disabled={busy || !(adminCommentDrafts[item.id] ?? '').trim()}
+                      className="px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] text-sm font-semibold hover:bg-[var(--color-info-surface)] disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      Добавить комментарий
+                    </button>
+                  </div>
+
+                  {item.comments && item.comments.length > 0 && (
+                    <div className="mt-4 border-t border-[color:var(--color-info-border)] pt-3">
+                      <div className="text-xs font-semibold text-[var(--color-ink-soft)] mb-2">Комментарии</div>
+                      <div className="space-y-2">
+                        {item.comments.map((comment) => (
+                          <div
+                            key={comment.id}
+                            className="text-sm text-[var(--color-ink-soft)] bg-[var(--color-info-surface)] rounded-lg px-3 py-2"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-[var(--color-ink)]">{adminCommentKindLabel[comment.kind] ?? 'Комментарий'}</span>
+                              <span className="text-xs">{formatRequestDate(comment.createdAt)}</span>
+                            </div>
+                            <div className="mt-1 whitespace-pre-wrap">{comment.text}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

@@ -10,15 +10,6 @@ const API_BASE_URL = (
 const apiFetch = (input: string, init: RequestInit = {}) => fetch(input, { credentials: 'include', ...init });
 const formatCurrency = (value: number) => `${value.toLocaleString('ru-RU')} ₽`;
 
-const mockExpenseData = [
-  { name: 'Май', amount: 4500 },
-  { name: 'Июнь', amount: 3200 },
-  { name: 'Июль', amount: 2800 },
-  { name: 'Август', amount: 2900 },
-  { name: 'Сентябрь', amount: 4100 },
-  { name: 'Октябрь', amount: 5200 },
-];
-
 const mapApiDebtEntry = (item: any): AccountDebtEntry => ({
   id: item.id ?? '',
   username: item.username || '',
@@ -167,7 +158,7 @@ const Dashboard: React.FC = () => {
     resizeObserver.observe(el);
 
     return () => resizeObserver.disconnect();
-  }, []);
+  }, [meterHistoryLoading, meterHistoryError, meterHistory.length]);
 
   useLayoutEffect(() => {
     const el = meterChartRef.current;
@@ -183,7 +174,7 @@ const Dashboard: React.FC = () => {
     const obs = new ResizeObserver(update);
     obs.observe(el);
     return () => obs.disconnect();
-  }, []);
+  }, [meterHistoryLoading, meterHistoryError, meterHistory.length]);
 
   const linkedDebts = debtSummary?.links ?? [];
   const totalDebt = debtSummary?.totalDebt ?? 0;
@@ -207,7 +198,8 @@ const Dashboard: React.FC = () => {
       })),
     [meterHistorySorted],
   );
-  const hasMeterChart = meterW > 0 && meterH > 0 && meterChartData.length > 0;
+  const hasMeterData = meterChartData.length > 0;
+  const hasMeterChart = meterW > 0 && meterH > 0 && hasMeterData;
 
   const monthlyStackedData = useMemo(() => {
     const buckets = new Map<
@@ -226,17 +218,12 @@ const Dashboard: React.FC = () => {
       buckets.set(key, current);
     });
     const aggregated = Array.from(buckets.values()).sort((a, b) => a.order - b.order);
-    const lastSix = aggregated.slice(-6);
-    if (lastSix.length > 0) return lastSix;
-    // Fallback to mock data to avoid empty graph on brand new tenants
-    return mockExpenseData.map((row, idx) => ({
-      label: row.name,
-      hotWater: row.amount * 0.2,
-      coldWater: row.amount * 0.25,
-      electricity: row.amount * 0.55,
-      order: idx,
-    }));
+    return aggregated.slice(-6);
   }, [meterHistorySorted]);
+
+  const hasAnyData = hasLinks || hasMeterData;
+  const showEmptyState = !debtLoading && !meterHistoryLoading && !hasAnyData && !debtError && !meterHistoryError;
+  const showMeterVisuals = meterHistoryLoading || Boolean(meterHistoryError) || hasMeterData;
 
   const handleMeterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -273,19 +260,42 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const headerSection = (
+    <header className="space-y-1">
+      <h1 className="text-2xl font-bold text-[var(--color-ink)]">Личный кабинет</h1>
+      <p className="text-[var(--color-ink-soft)]">
+        {debtLoading
+          ? 'Загружаем данные по вашему счету...'
+          : hasLinks
+          ? `Текущая задолженность: ${formatCurrency(totalDebt)}`
+          : 'Попросите администратора привязать ваш аккаунт к квартире, чтобы видеть задолженность.'}
+      </p>
+      {debtError && <p className="text-sm text-accent">{debtError}</p>}
+    </header>
+  );
+
+  if (showEmptyState) {
+    return (
+      <div className="space-y-6">
+        {headerSection}
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)] flex items-center justify-center text-primary">
+              <span className="material-symbols-outlined text-3xl">home</span>
+            </div>
+            <p className="text-lg font-semibold text-[var(--color-ink)]">Нет данных</p>
+            <p className="text-sm text-[var(--color-ink-soft)] max-w-md">
+              Как только появится информация по вашему дому, мы покажем её на этой странице.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-bold text-[var(--color-ink)]">Личный кабинет</h1>
-        <p className="text-[var(--color-ink-soft)]">
-          {debtLoading
-            ? 'Загружаем данные по вашему счету...'
-            : hasLinks
-            ? `Текущая задолженность: ${formatCurrency(totalDebt)}`
-            : 'Попросите администратора привязать ваш аккаунт к квартире, чтобы видеть задолженность.'}
-        </p>
-        {debtError && <p className="text-sm text-accent">{debtError}</p>}
-      </header>
+      {headerSection}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -327,106 +337,112 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Cashflow chart */}
-        <div className="bg-[var(--color-info-surface)] p-6 rounded-xl border border-[color:var(--color-info-border)] shadow-sm backdrop-blur-sm min-w-0">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-semibold text-[var(--color-ink)]">Потребление за 6 месяцев</h3>
-            <span className="text-xs text-[var(--color-ink-soft)]">Гор/Хол вода и электричество</span>
+      {showMeterVisuals && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Cashflow chart */}
+          <div className="bg-[var(--color-info-surface)] p-6 rounded-xl border border-[color:var(--color-info-border)] shadow-sm backdrop-blur-sm min-w-0">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-semibold text-[var(--color-ink)]">Потребление за 6 месяцев</h3>
+              <span className="text-xs text-[var(--color-ink-soft)]">Гор/Хол вода и электричество</span>
+            </div>
+            <div ref={chartContainerRef} className="h-72 w-full min-w-0">
+              {meterHistoryLoading ? (
+                <div className="flex h-full items-center justify-center text-sm text-[var(--color-ink-soft)]">Загружаем данные...</div>
+              ) : meterHistoryError ? (
+                <div className="flex h-full items-center justify-center text-sm text-accent text-center">{meterHistoryError}</div>
+              ) : hasMeterData && width > 0 && height > 0 ? (
+                <ResponsiveContainer width={width} height={height}>
+                  <BarChart data={monthlyStackedData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="8%" barGap={6}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(175, 194, 215, 0.6)" />
+                    <XAxis
+                      dataKey="label"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#3b4a3b', fontSize: 12 }}
+                      dy={10}
+                      padding={{ left: 0, right: 0 }}
+                    />
+                    <YAxis
+                      width={44}
+                      tickMargin={6}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#3b4a3b', fontSize: 12 }}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(175, 194, 215, 0.12)' }}
+                      formatter={(value: number, key) => {
+                        const label = resourceLabels[key as keyof typeof resourceLabels] ?? key;
+                        return [value, label];
+                      }}
+                      contentStyle={{ borderRadius: '10px', border: '1px solid rgba(175, 194, 215, 0.45)', boxShadow: '0 10px 30px rgba(47, 58, 42, 0.12)' }}
+                    />
+                    <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12, paddingLeft: 8 }} />
+                    <Bar dataKey="hotWater" name={resourceLabels.hotWater} stackId="consumption" fill="#b4633b" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="coldWater" name={resourceLabels.coldWater} stackId="consumption" fill="#5aa7a7" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="electricity" name={resourceLabels.electricity} stackId="consumption" fill="var(--color-forest)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : hasMeterData ? (
+                <div className="flex h-full items-center justify-center text-sm text-[var(--color-ink-soft)]">Готовим график...</div>
+              ) : null}
+            </div>
           </div>
-          <div ref={chartContainerRef} className="h-72 w-full min-w-0">
-            {width > 0 && height > 0 ? (
-              <ResponsiveContainer width={width} height={height}>
-                <BarChart data={monthlyStackedData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="8%" barGap={6}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(175, 194, 215, 0.6)" />
-                  <XAxis
-                    dataKey="label"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#3b4a3b', fontSize: 12 }}
-                    dy={10}
-                    padding={{ left: 0, right: 0 }}
-                  />
-                  <YAxis
-                    width={44}
-                    tickMargin={6}
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#3b4a3b', fontSize: 12 }}
-                  />
-                  <Tooltip
-                    cursor={{ fill: 'rgba(175, 194, 215, 0.12)' }}
-                    formatter={(value: number, key) => {
-                      const label = resourceLabels[key as keyof typeof resourceLabels] ?? key;
-                      return [value, label];
-                    }}
-                    contentStyle={{ borderRadius: '10px', border: '1px solid rgba(175, 194, 215, 0.45)', boxShadow: '0 10px 30px rgba(47, 58, 42, 0.12)' }}
-                  />
-                  <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12, paddingLeft: 8 }} />
-                  <Bar dataKey="hotWater" name={resourceLabels.hotWater} stackId="consumption" fill="#b4633b" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="coldWater" name={resourceLabels.coldWater} stackId="consumption" fill="#5aa7a7" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="electricity" name={resourceLabels.electricity} stackId="consumption" fill="var(--color-forest)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-[var(--color-ink-soft)]">
-                Загружаем график...
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Meter chart */}
-        <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-4 sm:p-6 backdrop-blur-sm min-w-0">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-[var(--color-ink)]">Динамика потребления</h3>
-          </div>
-          <div ref={meterChartRef} className="h-64 sm:h-72 w-full min-w-0">
-            {hasMeterChart ? (
-              <ResponsiveContainer width={meterW} height={meterH}>
-                <AreaChart data={meterChartData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorHot" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#b4633b" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#b4633b" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorCold" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#5aa7a7" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#5aa7a7" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorElec" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--color-forest)" stopOpacity={0.16} />
-                      <stop offset="95%" stopColor="var(--color-forest)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#3b4a3b', fontSize: 12 }} />
-                  <YAxis width={32} tickMargin={6} axisLine={false} tickLine={false} tick={{ fill: '#3b4a3b', fontSize: 12 }} />
-                  <CartesianGrid vertical={false} stroke="rgba(175, 194, 215, 0.6)" strokeDasharray="3 3" />
-                  <Tooltip
-                    formatter={(value: number, key) => {
-                      const label = resourceLabels[key as keyof typeof resourceLabels] ?? key;
-                      return [value, label];
-                    }}
-                    contentStyle={{
-                      borderRadius: '10px',
-                      border: '1px solid rgba(175, 194, 215, 0.45)',
-                      boxShadow: '0 10px 30px rgba(47, 58, 42, 0.12)',
-                    }}
-                  />
-                  <Legend verticalAlign="top" height={32} wrapperStyle={{ fontSize: 12 }} />
-                  <Area type="monotone" dataKey="hotWater" name={resourceLabels.hotWater} stroke="#b4633b" strokeWidth={2} fillOpacity={1} fill="url(#colorHot)" />
-                  <Area type="monotone" dataKey="coldWater" name={resourceLabels.coldWater} stroke="#5aa7a7" strokeWidth={2} fillOpacity={1} fill="url(#colorCold)" />
-                  <Area type="monotone" dataKey="electricity" name={resourceLabels.electricity} stroke="var(--color-forest)" strokeWidth={2} fillOpacity={1} fill="url(#colorElec)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-[var(--color-ink-soft)]">
-                {meterHistoryLoading ? 'Загружаем данные...' : meterHistoryError || 'Пока нет данных по показаниям'}
-              </div>
-            )}
+          {/* Meter chart */}
+          <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-4 sm:p-6 backdrop-blur-sm min-w-0">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-[var(--color-ink)]">Динамика потребления</h3>
+            </div>
+            <div ref={meterChartRef} className="h-64 sm:h-72 w-full min-w-0">
+              {meterHistoryLoading ? (
+                <div className="flex h-full items-center justify-center text-sm text-[var(--color-ink-soft)]">Загружаем данные...</div>
+              ) : meterHistoryError ? (
+                <div className="flex h-full items-center justify-center text-sm text-accent text-center">{meterHistoryError}</div>
+              ) : hasMeterChart ? (
+                <ResponsiveContainer width={meterW} height={meterH}>
+                  <AreaChart data={meterChartData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorHot" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#b4633b" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#b4633b" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorCold" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#5aa7a7" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#5aa7a7" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorElec" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--color-forest)" stopOpacity={0.16} />
+                        <stop offset="95%" stopColor="var(--color-forest)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#3b4a3b', fontSize: 12 }} />
+                    <YAxis width={32} tickMargin={6} axisLine={false} tickLine={false} tick={{ fill: '#3b4a3b', fontSize: 12 }} />
+                    <CartesianGrid vertical={false} stroke="rgba(175, 194, 215, 0.6)" strokeDasharray="3 3" />
+                    <Tooltip
+                      formatter={(value: number, key) => {
+                        const label = resourceLabels[key as keyof typeof resourceLabels] ?? key;
+                        return [value, label];
+                      }}
+                      contentStyle={{
+                        borderRadius: '10px',
+                        border: '1px solid rgba(175, 194, 215, 0.45)',
+                        boxShadow: '0 10px 30px rgba(47, 58, 42, 0.12)',
+                      }}
+                    />
+                    <Legend verticalAlign="top" height={32} wrapperStyle={{ fontSize: 12 }} />
+                    <Area type="monotone" dataKey="hotWater" name={resourceLabels.hotWater} stroke="#b4633b" strokeWidth={2} fillOpacity={1} fill="url(#colorHot)" />
+                    <Area type="monotone" dataKey="coldWater" name={resourceLabels.coldWater} stroke="#5aa7a7" strokeWidth={2} fillOpacity={1} fill="url(#colorCold)" />
+                    <Area type="monotone" dataKey="electricity" name={resourceLabels.electricity} stroke="var(--color-forest)" strokeWidth={2} fillOpacity={1} fill="url(#colorElec)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : hasMeterData ? (
+                <div className="flex h-full items-center justify-center text-sm text-[var(--color-ink-soft)]">Готовим график...</div>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Meter form */}

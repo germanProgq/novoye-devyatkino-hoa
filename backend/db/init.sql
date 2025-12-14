@@ -96,6 +96,12 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Seed demo users; backend overwrites password hashes on startup from env vars.
+INSERT INTO users (username, password_hash, role) VALUES
+('admin', 'placeholder', 'admin'),
+('user', 'placeholder', 'user')
+ON CONFLICT (username) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS account_people (
   id TEXT PRIMARY KEY,
   username TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
@@ -121,3 +127,39 @@ CREATE TABLE IF NOT EXISTS meter_readings (
 
 CREATE INDEX IF NOT EXISTS meter_readings_username_idx ON meter_readings (username);
 CREATE INDEX IF NOT EXISTS meter_readings_created_idx ON meter_readings (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS requests (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'Общее',
+  description TEXT NOT NULL,
+  full_name TEXT,
+  status TEXT NOT NULL DEFAULT 'new',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS requests_status_idx ON requests (status);
+CREATE INDEX IF NOT EXISTS requests_username_idx ON requests (username);
+CREATE INDEX IF NOT EXISTS requests_updated_idx ON requests (updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS request_comments (
+  id TEXT PRIMARY KEY,
+  request_id TEXT NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'note',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS request_comments_request_idx ON request_comments (request_id, created_at);
+
+INSERT INTO requests (id, username, title, category, description, full_name, status, created_at, updated_at) VALUES
+('req-sample-1', 'user', 'Шум в подъезде по вечерам', 'Общее имущество', 'После 22:00 регулярно слышен шум со второго этажа. Просьба разобраться с нарушителями тишины.', 'Иван Петров', 'in_progress', NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day'),
+('req-sample-2', 'user', 'Нет света в подъезде', 'Инженерные системы', 'Перегорела лампочка у лифта на 5 этаже, вечером очень темно.', 'Марина Соколова', 'new', NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days'),
+('req-sample-3', 'user', 'Заявка на замену счетчика воды', 'Счетчики', 'Нужно заменить счетчик холодной воды в квартире 54, срок поверки истек.', 'Александр Смирнов', 'resolved', NOW() - INTERVAL '10 days', NOW() - INTERVAL '2 days')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO request_comments (id, request_id, text, kind, created_at) VALUES
+('reqc-sample-1', 'req-sample-3', 'Исполнено, счетчик заменен 12.03', 'note', NOW() - INTERVAL '2 days')
+ON CONFLICT (id) DO NOTHING;

@@ -79,6 +79,28 @@ export interface MeterRecord {
 
 export type MeterReading = MeterRecord;
 
+export type RequestStatus = 'new' | 'in_progress' | 'resolved';
+
+export interface RequestComment {
+  id: string;
+  text: string;
+  createdAt: string;
+  kind: 'reopen' | 'note';
+}
+
+export interface RequestItem {
+  id: string;
+  username?: string;
+  title: string;
+  category: string;
+  description: string;
+  fullName?: string;
+  status: RequestStatus;
+  createdAt: string;
+  updatedAt: string;
+  comments?: RequestComment[];
+}
+
 export interface FaqItem {
   question: string;
   answer: string;

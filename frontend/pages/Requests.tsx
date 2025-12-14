@@ -1,25 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-
-type RequestStatus = 'new' | 'in_progress' | 'resolved';
-
-type RequestComment = {
-  id: string;
-  text: string;
-  createdAt: string;
-  kind: 'reopen' | 'note';
-};
-
-type RequestItem = {
-  id: string;
-  title: string;
-  category: string;
-  description: string;
-  fullName?: string;
-  status: RequestStatus;
-  createdAt: string;
-  updatedAt: string;
-  comments?: RequestComment[];
-};
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { RequestComment, RequestItem, RequestStatus } from '../types';
 
 const statusMeta: Record<RequestStatus, { label: string; color: string; bg: string; icon: string }> = {
   new: { label: 'Новое', color: 'text-primary', bg: 'bg-primary/10', icon: 'fiber_new' },
@@ -31,50 +11,12 @@ const commentKindLabel: Record<RequestComment['kind'], string> = {
   note: 'Комментарий администратора',
 };
 
-const STORAGE_KEY = 'hoa-requests-v1';
-
-const seedRequests: RequestItem[] = [
-  {
-    id: 'req-1',
-    title: 'Шум в подъезде по вечерам',
-    category: 'Общее имущество',
-    description: 'После 22:00 регулярно слышен шум со второго этажа. Просьба разобраться с нарушителями тишины.',
-    fullName: 'Иван Петров',
-    status: 'in_progress',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 20).toISOString(),
-    comments: [],
-  },
-  {
-    id: 'req-2',
-    title: 'Нет света в подъезде',
-    category: 'Инженерные системы',
-    description: 'Перегорела лампочка у лифта на 5 этаже, вечером очень темно.',
-    fullName: 'Марина Соколова',
-    status: 'in_progress',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
-    comments: [],
-  },
-  {
-    id: 'req-3',
-    title: 'Заявка на замену счетчика воды',
-    category: 'Счетчики',
-    description: 'Нужно заменить счетчик холодной воды в квартире 54, срок поверки истек.',
-    fullName: 'Александр Смирнов',
-    status: 'resolved',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 12).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-    comments: [
-      {
-        id: 'c-1',
-        text: 'Исполнено, счетчик заменен 12.03',
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-        kind: 'note',
-      },
-    ],
-  },
-];
+const API_BASE_URL = (
+  import.meta.env.VITE_BACKEND_URL
+    ? String(import.meta.env.VITE_BACKEND_URL)
+    : 'http://localhost:8080'
+).replace(/\/$/, '');
+const apiFetch = (input: string, init: RequestInit = {}) => fetch(input, { credentials: 'include', ...init });
 
 const formatDate = (value: string) => {
   const date = new Date(value);
@@ -87,34 +29,28 @@ const formatDate = (value: string) => {
   });
 };
 
-const loadFromStorage = (): RequestItem[] => {
-  if (typeof window === 'undefined') return seedRequests;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seedRequests;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return seedRequests;
-    return parsed.map((item: any) => ({
-      ...item,
-      fullName: item.fullName || item.fio || '',
-      status: item.status === 'resolved' ? 'resolved' : item.status === 'in_progress' ? 'in_progress' : 'new',
-      comments: Array.isArray(item.comments)
-        ? item.comments.map((c: any) => ({
-            id: c.id || `c-${Math.random().toString(36).slice(2)}`,
-            text: c.text || '',
-            createdAt: c.createdAt || c.date || new Date().toISOString(),
-            kind: c.kind === 'note' ? 'note' : 'reopen',
-          }))
-        : [],
-    }));
-  } catch (err) {
-    console.error('Failed to load requests from storage', err);
-    return seedRequests;
-  }
-};
+const mapApiComment = (raw: any): RequestComment => ({
+  id: raw?.id ?? `c-${Math.random().toString(36).slice(2)}`,
+  text: raw?.text ?? '',
+  createdAt: raw?.createdAt || raw?.created_at || raw?.date || '',
+  kind: raw?.kind === 'reopen' ? 'reopen' : 'note',
+});
+
+const mapApiRequest = (raw: any): RequestItem => ({
+  id: raw?.id ?? '',
+  username: raw?.username || raw?.user || '',
+  title: raw?.title ?? '',
+  category: raw?.category || 'Общее',
+  description: raw?.description ?? '',
+  fullName: raw?.fullName || raw?.full_name || raw?.fio || '',
+  status: raw?.status === 'resolved' ? 'resolved' : raw?.status === 'in_progress' ? 'in_progress' : 'new',
+  createdAt: raw?.createdAt || raw?.created_at || '',
+  updatedAt: raw?.updatedAt || raw?.updated_at || raw?.createdAt || '',
+  comments: Array.isArray(raw?.comments) ? raw.comments.map(mapApiComment) : [],
+});
 
 const Requests: React.FC = () => {
-  const [requests, setRequests] = useState<RequestItem[]>(() => loadFromStorage());
+  const [requests, setRequests] = useState<RequestItem[]>([]);
   const [activeTab, setActiveTab] = useState<'active' | 'resolved' | 'all'>('active');
   const [viewMode, setViewMode] = useState<'list' | 'new'>('list');
   const [title, setTitle] = useState('');
@@ -122,12 +58,33 @@ const Requests: React.FC = () => {
   const [description, setDescription] = useState('');
   const [fullName, setFullName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
-  const [reopenDrafts, setReopenDrafts] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+
+  const loadRequests = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/requests`);
+      if (!response.ok) {
+        throw new Error(`API responded with ${response.status}`);
+      }
+      const payload = await response.json();
+      const list = Array.isArray(payload.requests) ? payload.requests : Array.isArray(payload) ? payload : [];
+      setRequests(list.map(mapApiRequest));
+    } catch (err) {
+      console.error(err);
+      setLoadError('Не удалось загрузить заявки');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(requests));
-  }, [requests]);
+    void loadRequests();
+  }, [loadRequests]);
 
   const counts = useMemo(() => {
     const resolved = requests.filter((item) => item.status === 'resolved').length;
@@ -142,14 +99,9 @@ const Requests: React.FC = () => {
     return list;
   }, [requests, activeTab]);
 
-  const updateStatus = (id: string, status: RequestStatus) => {
-    setRequests((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status, updatedAt: new Date().toISOString() } : item)),
-    );
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitSuccess(null);
     if (!title.trim() || !description.trim()) {
       setFormError('Заполните тему и описание обращения');
       return;
@@ -159,24 +111,37 @@ const Requests: React.FC = () => {
       return;
     }
     setFormError(null);
-    const now = new Date().toISOString();
-    const newRequest: RequestItem = {
-      id: `req-${Date.now()}`,
-      title: title.trim(),
-      category: category.trim() || 'Общее',
-      description: description.trim(),
-      fullName: fullName.trim(),
-      status: 'new',
-      createdAt: now,
-      updatedAt: now,
-    };
-    setRequests((prev) => [newRequest, ...prev]);
-    setTitle('');
-    setCategory('Общее');
-    setDescription('');
-    setFullName('');
-    setActiveTab('active');
-    setViewMode('list');
+    setSubmitting(true);
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim(),
+          category: category.trim() || 'Общее',
+          description: description.trim(),
+          fullName: fullName.trim(),
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`API responded with ${response.status}`);
+      }
+      const payload = await response.json();
+      const created = mapApiRequest(payload.request ?? payload);
+      setRequests((prev) => [created, ...prev]);
+      setTitle('');
+      setCategory('Общее');
+      setDescription('');
+      setFullName('');
+      setActiveTab('active');
+      setViewMode('list');
+      setSubmitSuccess('Заявка отправлена. Мы сообщим о статусе.');
+    } catch (err) {
+      console.error(err);
+      setFormError('Не удалось отправить заявку. Попробуйте позже.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const renderStatusPill = (status: RequestStatus) => {
@@ -194,31 +159,6 @@ const Requests: React.FC = () => {
     { key: 'resolved', label: 'Решенные', count: counts.resolved },
     { key: 'all', label: 'Все', count: counts.all },
   ];
-
-  const handleReopen = (item: RequestItem) => {
-    const comment = (reopenDrafts[item.id] ?? '').trim();
-    if (!comment) return;
-    const now = new Date().toISOString();
-    const entry: RequestComment = {
-      id: `c-${Date.now()}`,
-      text: comment,
-      createdAt: now,
-      kind: 'reopen',
-    };
-    setRequests((prev) =>
-      prev.map((req) =>
-        req.id === item.id
-          ? {
-              ...req,
-              status: 'in_progress',
-              updatedAt: now,
-              comments: [...(req.comments ?? []), entry],
-            }
-          : req,
-      ),
-    );
-    setReopenDrafts((prev) => ({ ...prev, [item.id]: '' }));
-  };
 
   return (
     <div className="space-y-6">
@@ -293,11 +233,9 @@ const Requests: React.FC = () => {
               className="w-full px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] bg-white text-[var(--color-ink)] focus:ring-primary/30 focus:border-primary"
             />
             <datalist id="request-categories">
-              {[...new Set(requests.map((r) => r.category || 'Общее').concat(seedRequests.map((r) => r.category || 'Общее')))].map(
-                (cat) => (
-                  <option key={cat} value={cat} />
-                ),
-              )}
+              {[...new Set(['Общее', ...requests.map((r) => r.category || 'Общее')])].map((cat) => (
+                <option key={cat} value={cat} />
+              ))}
             </datalist>
           </div>
 
@@ -323,11 +261,13 @@ const Requests: React.FC = () => {
           <div className="md:col-span-2 flex flex-wrap gap-3 items-center justify-between">
             <button
               type="submit"
-              className="inline-flex items-center gap-2 bg-primary text-white font-semibold px-4 py-2 rounded-lg shadow-sm hover:bg-accent transition-colors"
+              disabled={submitting}
+              className="inline-flex items-center gap-2 bg-primary text-white font-semibold px-4 py-2 rounded-lg shadow-sm hover:bg-accent transition-colors disabled:opacity-70"
             >
               <span className="material-symbols-outlined text-base">send</span>
-              Отправить заявку
+              {submitting ? 'Отправляем...' : 'Отправить заявку'}
             </button>
+            {submitSuccess && <div className="text-sm text-emerald-700">{submitSuccess}</div>}
           </div>
         </form>
         </div>
@@ -361,24 +301,52 @@ const Requests: React.FC = () => {
                 );
               })}
             </div>
-            <button
-              onClick={() => setViewMode('new')}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-dashed text-sm font-semibold text-primary hover:bg-[var(--color-info-surface)] transition-colors"
-            >
-              <span className="material-symbols-outlined text-base">add</span>
-              Добавить новую
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => void loadRequests()}
+                disabled={loading}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold text-[var(--color-ink)] hover:bg-[var(--color-info-surface)] disabled:opacity-60"
+              >
+                <span className="material-symbols-outlined text-base">refresh</span>
+                {loading ? 'Обновляем...' : 'Обновить'}
+              </button>
+              <button
+                onClick={() => setViewMode('new')}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-dashed text-sm font-semibold text-primary hover:bg-[var(--color-info-surface)] transition-colors"
+              >
+                <span className="material-symbols-outlined text-base">add</span>
+                Добавить новую
+              </button>
+            </div>
           </div>
 
       <div className="space-y-3">
-        {filteredRequests.length === 0 && (
+        {loadError && (
+          <div className="border border-[color:var(--color-info-border)] rounded-xl bg-red-50 px-6 py-5 text-[var(--color-ink)] flex flex-wrap gap-3 items-center justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="material-symbols-outlined text-base text-accent">error</span>
+              {loadError}
+            </div>
+            <button
+              onClick={() => void loadRequests()}
+              className="text-sm font-semibold text-primary hover:text-accent"
+            >
+              Повторить загрузку
+            </button>
+          </div>
+        )}
+        {loading && (
+          <div className="border border-[color:var(--color-info-border)] rounded-xl bg-[var(--color-info-surface)] px-6 py-5 text-[var(--color-ink-soft)]">
+            Загружаем ваши заявки...
+          </div>
+        )}
+        {!loading && filteredRequests.length === 0 && (
           <div className="border border-[color:var(--color-info-border)] rounded-xl bg-[var(--color-info-surface)] px-6 py-5 text-[var(--color-ink-soft)]">
             В этой вкладке пока нет заявок.
           </div>
         )}
 
         {filteredRequests.map((item) => {
-          const meta = statusMeta[item.status];
           return (
             <div
               key={item.id}
@@ -401,40 +369,8 @@ const Requests: React.FC = () => {
                 <div className="text-xs text-[var(--color-ink-soft)]">
                   Создано {formatDate(item.createdAt)}
                 </div>
-                <div className="flex-1 min-w-[240px] flex flex-wrap gap-2 justify-end">
-                  {item.status === 'new' && (
-                    <button
-                      onClick={() => updateStatus(item.id, 'in_progress')}
-                      className="px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] text-sm font-medium hover:bg-[var(--color-info-surface)]"
-                    >
-                      Взять в работу
-                    </button>
-                  )}
-                  {item.status !== 'resolved' && (
-                    <button
-                      onClick={() => updateStatus(item.id, 'resolved')}
-                      className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 shadow-sm"
-                    >
-                      Отметить решенной
-                    </button>
-                  )}
-                  {item.status === 'resolved' && (
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
-                      <input
-                        value={reopenDrafts[item.id] ?? ''}
-                        onChange={(e) => setReopenDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                        placeholder="Комментарий для возврата"
-                        className="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] bg-[var(--color-info-surface)] text-[var(--color-ink)] focus:ring-primary/30 focus:border-primary"
-                      />
-                      <button
-                        onClick={() => handleReopen(item)}
-                        disabled={!(reopenDrafts[item.id] ?? '').trim()}
-                        className="px-3 py-2 rounded-lg border border-[color:var(--color-info-border)] text-sm font-semibold hover:bg-[var(--color-info-surface)] disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        Вернуть в работу
-                      </button>
-                    </div>
-                  )}
+                <div className="text-xs text-[var(--color-ink-soft)]">
+                  Администратор обновит статус по мере обработки заявки
                 </div>
               </div>
                 {item.comments && item.comments.length > 0 && (

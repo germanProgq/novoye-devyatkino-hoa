@@ -61,5 +61,6 @@ Environment overrides (defaults shown) for backend container:
 - `GET /api/contributions` – список взносов жильцов (POST для добавления), `.../parse` для подсказок по ФИО/квартире, `.../summary` для графиков.
 - `GET /api/debtors` – список должников (POST/PUT/DELETE для управления записями).
 - `POST /auth/login` / `/auth/refresh` / `/auth/logout` / `/auth/me` – JWT-based session endpoints (access/refresh tokens are stored in httpOnly cookies).
+- `GET/POST /api/requests` – заявки жителей (создать может пользователь, обрабатывать – админ), `PUT .../:id/status` и `POST .../:id/comments` для смены статуса и комментариев.
 
 CORS is open for GET/OPTIONS to simplify local frontend development.
