@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { CSSProperties, useEffect, useMemo, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { SessionUser, isAdmin } from '../utils/auth';
 
@@ -8,10 +8,11 @@ const Sidebar: React.FC<{
   user: SessionUser;
   onLogout: () => void;
   onSwitchAccount: () => void;
-}> = ({ isOpen, onClose, user, onLogout, onSwitchAccount }) => {
+  showMetersLink: boolean;
+}> = ({ isOpen, onClose, user, onLogout, onSwitchAccount, showMetersLink }) => {
   const navItems = [
     { name: 'Главная', path: '/dashboard', icon: 'dashboard' },
-    // { name: 'Показания счетчиков', path: '/meters', icon: 'speed' },
+    ...(showMetersLink ? [{ name: 'Показания счетчиков', path: '/meters', icon: 'speed' }] : []),
     { name: 'Документы', path: '/documents', icon: 'folder' },
     { name: 'Новости', path: '/news', icon: 'newspaper' },
     { name: 'Заявки', path: '/requests', icon: 'assignment' },
@@ -22,8 +23,19 @@ const Sidebar: React.FC<{
 
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarReady, setSidebarReady] = useState(false);
   const name = useMemo(() => user.username || 'Неизвестный', [user.username]);
   const meta = useMemo(() => (isAdmin(user) ? 'Администратор' : 'Пользователь'), [user]);
+
+  useEffect(() => {
+    const shouldReveal = isOpen || window.innerWidth >= 1024;
+    if (!shouldReveal) {
+      setSidebarReady(false);
+      return undefined;
+    }
+    const id = requestAnimationFrame(() => setSidebarReady(true));
+    return () => cancelAnimationFrame(id);
+  }, [isOpen]);
 
   const handleLogout = () => {
     onLogout();
@@ -50,77 +62,81 @@ const Sidebar: React.FC<{
       {/* Mobile Overlay */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden sidebar-overlay"
           onClick={onClose}
         />
       )}
 
-      <aside className={sidebarClasses}>
-        <div className="flex items-center gap-3 px-6 h-16 border-b border-[color:var(--color-info-border)]">
-          <img
-            src="/images/gerb250.jpg"
-            alt="Герб"
-            className="w-10 h-10 object-cover rounded-lg bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]"
-          />
-          <span className="text-xl font-bold text-[var(--color-ink)]">Портал ТСЖ</span>
-        </div>
+      <aside className={`${sidebarClasses} sidebar-panel ${sidebarReady ? 'sidebar-panel--visible' : ''}`}>
+        <div className={`h-full flex flex-col sidebar-animate ${sidebarReady ? 'sidebar-animate--visible' : ''}`}>
+          <div className="flex items-center gap-3 px-6 h-16 border-b border-[color:var(--color-info-border)]">
+            <img
+              src="/images/gerb250.jpg"
+              alt="Герб"
+              className="w-10 h-10 object-cover rounded-lg bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]"
+            />
+            <span className="text-xl font-bold text-[var(--color-ink)]">Портал ТСЖ</span>
+          </div>
 
-        <nav className="p-4 space-y-1">
-          {visibleNavItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              onClick={() => { if(window.innerWidth < 1024) onClose(); }}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-primary/10 text-primary ring-1 ring-[color:var(--color-info-border)]'
-                    : 'text-[var(--color-ink-soft)] hover:bg-[var(--color-info-surface)] hover:text-[var(--color-ink)]'
-                }`
-              }
-            >
-              <span className={`material-symbols-outlined ${item.path === '/' ? '' : ''}`}>
-                {item.icon}
-              </span>
-              {item.name}
-            </NavLink>
-          ))}
-        </nav>
+          <nav className="p-4 space-y-1">
+            {visibleNavItems.map((item, index) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                onClick={() => { if(window.innerWidth < 1024) onClose(); }}
+                style={{ '--sidebar-delay': `${index * 60}ms` } as CSSProperties}
+                className={({ isActive }) =>
+                  `sidebar-nav-animate flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary/10 text-primary ring-1 ring-[color:var(--color-info-border)]'
+                      : 'text-[var(--color-ink-soft)] hover:bg-[var(--color-info-surface)] hover:text-[var(--color-ink)]'
+                  }`
+                }
+              >
+                <span className={`material-symbols-outlined ${item.path === '/' ? '' : ''}`}>
+                  {item.icon}
+                </span>
+                {item.name}
+              </NavLink>
+            ))}
+          </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-[color:var(--color-info-border)]">
-          <div className="relative">
-            <button
-              onClick={() => setMenuOpen((prev) => !prev)}
-              className="flex items-center gap-3 w-full px-4 py-2 text-left rounded-xl hover:bg-[var(--color-info-surface)] transition"
-            >
-              <div className="w-10 h-10 rounded-full bg-[var(--color-info-surface)] text-[var(--color-ink-soft)] border border-[color:var(--color-info-border)] flex items-center justify-center">
-                <span className="material-symbols-outlined">person</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[var(--color-ink)] truncate">{name}</p>
-                <p className="text-xs text-[var(--color-ink-soft)] truncate">{meta}</p>
-              </div>
-              <span className="material-symbols-outlined text-[var(--color-ink-soft)]">expand_more</span>
-            </button>
+          <div className="mt-auto p-4 border-t border-[color:var(--color-info-border)]">
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen((prev) => !prev)}
+                className="flex items-center gap-3 w-full px-4 py-2 text-left rounded-xl hover:bg-[var(--color-info-surface)] transition sidebar-nav-animate"
+                style={{ '--sidebar-delay': `${visibleNavItems.length * 60}ms` } as CSSProperties}
+              >
+                <div className="w-10 h-10 rounded-full bg-[var(--color-info-surface)] text-[var(--color-ink-soft)] border border-[color:var(--color-info-border)] flex items-center justify-center">
+                  <span className="material-symbols-outlined">person</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-[var(--color-ink)] truncate">{name}</p>
+                  <p className="text-xs text-[var(--color-ink-soft)] truncate">{meta}</p>
+                </div>
+                <span className="material-symbols-outlined text-[var(--color-ink-soft)]">expand_more</span>
+              </button>
 
-            {menuOpen && (
-              <div className="absolute bottom-14 left-4 right-4 bg-white border border-[color:var(--color-info-border)] shadow-xl rounded-xl overflow-hidden z-20">
-                <button
-                  onClick={handleSwitchAccount}
-                  className="flex items-center gap-3 w-full px-4 py-3 text-sm hover:bg-[var(--color-info-surface)] text-[var(--color-ink)]"
-                >
-                  <span className="material-symbols-outlined text-primary">switch_account</span>
-                  Сменить аккаунт
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center gap-3 w-full px-4 py-3 text-sm hover:bg-[var(--color-info-surface)] text-accent"
-                >
-                  <span className="material-symbols-outlined">logout</span>
-                  Выйти
-                </button>
-              </div>
-            )}
+              {menuOpen && (
+                <div className="absolute bottom-14 left-4 right-4 bg-white border border-[color:var(--color-info-border)] shadow-xl rounded-xl overflow-hidden z-20">
+                  <button
+                    onClick={handleSwitchAccount}
+                    className="flex items-center gap-3 w-full px-4 py-3 text-sm hover:bg-[var(--color-info-surface)] text-[var(--color-ink)]"
+                  >
+                    <span className="material-symbols-outlined text-primary">switch_account</span>
+                    Сменить аккаунт
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-3 w-full px-4 py-3 text-sm hover:bg-[var(--color-info-surface)] text-accent"
+                  >
+                    <span className="material-symbols-outlined">logout</span>
+                    Выйти
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </aside>

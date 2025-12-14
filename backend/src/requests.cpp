@@ -278,6 +278,59 @@ bool insert_request(AppContext& ctx, RequestItem& r) {
   return true;
 }
 
+bool fetch_request_by_id(AppContext& ctx, const std::string& id, RequestItem& out, bool& not_found) {
+  not_found = false;
+  PGconn* conn = db_connect(ctx.db);
+  if (!conn) return false;
+
+  const char* paramValues[1] = {id.c_str()};
+  const int paramLengths[1] = {static_cast<int>(id.size())};
+  const int paramFormats[1] = {0};
+
+  PGresult* res = PQexecParams(conn,
+                               "SELECT id, username, title, category, description, COALESCE(full_name, ''), status, "
+                               "COALESCE(to_char(created_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ'), ''), "
+                               "COALESCE(to_char(updated_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ'), '') "
+                               "FROM requests WHERE id=$1;",
+                               1,
+                               nullptr,
+                               paramValues,
+                               paramLengths,
+                               paramFormats,
+                               0);
+
+  if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+    PQclear(res);
+    PQfinish(conn);
+    return false;
+  }
+  if (PQntuples(res) == 0) {
+    PQclear(res);
+    PQfinish(conn);
+    not_found = true;
+    return false;
+  }
+
+  out.id = PQgetvalue(res, 0, 0);
+  out.username = PQgetvalue(res, 0, 1);
+  out.title = PQgetvalue(res, 0, 2);
+  out.category = PQgetvalue(res, 0, 3);
+  out.description = PQgetvalue(res, 0, 4);
+  out.full_name = PQgetvalue(res, 0, 5);
+  out.status = PQgetvalue(res, 0, 6);
+  out.created_at = PQgetvalue(res, 0, 7);
+  out.updated_at = PQgetvalue(res, 0, 8);
+
+  PQclear(res);
+  if (!fetch_comments_for_request(conn, out.id, out.comments)) {
+    PQfinish(conn);
+    return false;
+  }
+
+  PQfinish(conn);
+  return true;
+}
+
 bool update_request_status(AppContext& ctx, const std::string& id, const std::string& status, RequestItem& out, bool& not_found) {
   not_found = false;
   PGconn* conn = db_connect(ctx.db);
@@ -438,6 +491,32 @@ void register_request_routes(httplib::Server& server, AppContext& ctx, const std
     body["requests"] = json::array();
     for (const auto& r : list) body["requests"].push_back(serialize_request(r));
     res.set_content(body.dump(), "application/json; charset=utf-8");
+    add_cors_headers(req, res, ctx);
+  });
+
+  // Fetch a single request (owner-only; admins can view any).
+  server.Get(base + R"(/([^/]+)$)", [&](const httplib::Request& req, httplib::Response& res) {
+    auto claims = authenticate_request(req, res, ctx, false);
+    if (!claims) return;
+
+    RequestItem item;
+    bool not_found = false;
+    if (!fetch_request_by_id(ctx, req.matches[1], item, not_found)) {
+      res.status = not_found ? 404 : 500;
+      res.set_content(not_found ? "Request not found" : "Failed to load request", "text/plain");
+      add_cors_headers(req, res, ctx);
+      return;
+    }
+
+    const bool is_admin = claims->role == UserRole::Admin;
+    if (!is_admin && item.username != claims->username) {
+      res.status = 403;
+      res.set_content("Forbidden", "text/plain");
+      add_cors_headers(req, res, ctx);
+      return;
+    }
+
+    res.set_content(serialize_request(item).dump(), "application/json; charset=utf-8");
     add_cors_headers(req, res, ctx);
   });
 

@@ -31,6 +31,75 @@ import {
   ResidentTariffsPage,
 } from './pages/resident';
 
+const API_BASE_URL = (
+  import.meta.env.VITE_BACKEND_URL
+    ? String(import.meta.env.VITE_BACKEND_URL)
+    : 'http://localhost:8080'
+).replace(/\/$/, '');
+const apiFetch = (input: string, init: RequestInit = {}) => fetch(input, { credentials: 'include', ...init });
+
+const useHasUserData = (user: SessionUser | null) => {
+  const [hasData, setHasData] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user) {
+      setHasData(null);
+      return;
+    }
+
+    const loadPresence = async () => {
+      let hasLinks = false;
+      let hasMeters = false;
+      let debtsLoaded = false;
+      let metersLoaded = false;
+
+      try {
+        const response = await apiFetch(`${API_BASE_URL}/api/accounts/me/debts`);
+        if (response.ok) {
+          debtsLoaded = true;
+          const payload = await response.json();
+          const links = Array.isArray(payload.links) ? payload.links : [];
+          hasLinks = links.length > 0;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+
+      try {
+        const response = await apiFetch(`${API_BASE_URL}/api/meters`);
+        if (response.ok) {
+          metersLoaded = true;
+          const payload = await response.json();
+          const list = Array.isArray(payload.readings) ? payload.readings : Array.isArray(payload) ? payload : [];
+          hasMeters = list.length > 0;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+
+      if (cancelled) return;
+
+      if (hasLinks || hasMeters) {
+        setHasData(true);
+      } else if (debtsLoaded && metersLoaded) {
+        setHasData(false);
+      } else {
+        setHasData(null);
+      }
+    };
+
+    setHasData(null);
+    void loadPresence();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.username]);
+
+  return hasData;
+};
+
 const AppLayout: React.FC<{
   user: SessionUser;
   onLogout: () => void;
@@ -42,6 +111,12 @@ const AppLayout: React.FC<{
   const navigate = useNavigate();
   const accountName = useMemo(() => user.username || 'Неизвестный', [user.username]);
   const accountMeta = useMemo(() => (user.role === 'admin' ? 'Администратор' : 'Пользователь'), [user.role]);
+  const hasUserData = useHasUserData(user);
+  const showMetersLink = hasUserData === false;
+  const pageTransitionClass = useMemo(() => {
+    if (location.pathname === '/documents') return 'page-transition page-transition--fade';
+    return 'page-transition';
+  }, [location.pathname]);
 
   // Helper to determine page title for mobile header
   const getPageTitle = () => {
@@ -81,6 +156,7 @@ const AppLayout: React.FC<{
         user={user}
         onLogout={handleLogout}
         onSwitchAccount={handleSwitchAccount}
+        showMetersLink={showMetersLink}
       />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -130,7 +206,9 @@ const AppLayout: React.FC<{
         {/* Main Content Scroll Area */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="max-w-6xl mx-auto">
-            <Outlet />
+            <div key={location.pathname} className={pageTransitionClass}>
+              <Outlet />
+            </div>
           </div>
         </main>
       </div>
