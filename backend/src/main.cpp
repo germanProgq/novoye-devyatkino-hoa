@@ -12,6 +12,7 @@
 #include "accounts.h"
 #include "context.h"
 #include "contributions.h"
+#include "meters.h"
 #include "db.h"
 #include "documents.h"
 #include "httplib.h"
@@ -205,6 +206,8 @@ int main(int argc, char** argv) {
   register_news_routes(server, ctx, "/api/news");
   register_contribution_routes(server, ctx, "/contributions");
   register_contribution_routes(server, ctx, "/api/contributions");
+  register_meter_routes(server, ctx, "/meters");
+  register_meter_routes(server, ctx, "/api/meters");
   register_debtor_routes(server, ctx, "/debtors");
   register_debtor_routes(server, ctx, "/api/debtors");
   register_account_routes(server, ctx, "/accounts");

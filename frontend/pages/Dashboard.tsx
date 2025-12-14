@@ -57,6 +57,9 @@ const Dashboard: React.FC = () => {
   const [debtLoading, setDebtLoading] = useState(true);
   const [debtError, setDebtError] = useState<string | null>(null);
   const [meterForm, setMeterForm] = useState({ hotWater: '', coldWater: '', electricity: '' });
+  const [meterSubmitting, setMeterSubmitting] = useState(false);
+  const [meterStatus, setMeterStatus] = useState<string | null>(null);
+  const [meterError, setMeterError] = useState<string | null>(null);
   const meterChartRef = useRef<HTMLDivElement>(null);
   const [{ width: meterW, height: meterH }, setMeterSize] = useState({ width: 0, height: 0 });
 
@@ -128,10 +131,38 @@ const Dashboard: React.FC = () => {
   const latestUpdate = linkedDebts.find((entry) => entry.updatedAt)?.updatedAt || '';
   const hasMeterChart = meterW > 0 && meterH > 0;
 
-  const handleMeterSubmit = (e: React.FormEvent) => {
+  const handleMeterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert('Показания успешно отправлены!');
-    setMeterForm({ hotWater: '', coldWater: '', electricity: '' });
+    setMeterError(null);
+    setMeterStatus(null);
+
+    const hot = Number.parseFloat(meterForm.hotWater);
+    const cold = Number.parseFloat(meterForm.coldWater);
+    const elec = Number.parseFloat(meterForm.electricity);
+
+    if (!Number.isFinite(hot) || !Number.isFinite(cold) || !Number.isFinite(elec)) {
+      setMeterError('Укажите корректные значения счётчиков');
+      return;
+    }
+
+    setMeterSubmitting(true);
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/meters`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hotWater: hot, coldWater: cold, electricity: elec }),
+      });
+      if (!response.ok) {
+        throw new Error(`API responded with ${response.status}`);
+      }
+      setMeterStatus('Показания успешно отправлены');
+      setMeterForm({ hotWater: '', coldWater: '', electricity: '' });
+    } catch (err) {
+      console.error(err);
+      setMeterError('Не удалось отправить показания. Попробуйте позже.');
+    } finally {
+      setMeterSubmitting(false);
+    }
   };
 
   return (
@@ -332,10 +363,13 @@ const Dashboard: React.FC = () => {
             </div>
             <button
               type="submit"
-              className="w-full bg-primary hover:bg-accent text-white font-medium py-2.5 rounded-lg transition-colors shadow-sm"
+              disabled={meterSubmitting}
+              className="w-full bg-primary hover:bg-accent text-white font-medium py-2.5 rounded-lg transition-colors shadow-sm disabled:opacity-70"
             >
-              Отправить показания
+              {meterSubmitting ? 'Отправляем...' : 'Отправить показания'}
             </button>
+            {meterStatus && <p className="text-sm text-[var(--color-ink)] text-center">{meterStatus}</p>}
+            {meterError && <p className="text-sm text-accent text-center">{meterError}</p>}
             <p className="text-xs text-center text-[var(--color-ink-soft)]">Следующая передача: через 20 дней</p>
           </form>
         </div>

@@ -109,3 +109,15 @@ CREATE TABLE IF NOT EXISTS account_people (
 
 CREATE UNIQUE INDEX IF NOT EXISTS account_people_normalized_idx ON account_people (normalized_name);
 CREATE INDEX IF NOT EXISTS account_people_username_idx ON account_people (username);
+
+CREATE TABLE IF NOT EXISTS meter_readings (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+  hot_water NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  cold_water NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  electricity NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS meter_readings_username_idx ON meter_readings (username);
+CREATE INDEX IF NOT EXISTS meter_readings_created_idx ON meter_readings (created_at DESC);

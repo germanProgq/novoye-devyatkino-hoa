@@ -12,6 +12,7 @@ add_executable(hoa_backend
   src/documents.cpp
   src/news.cpp
   src/contributions.cpp
+  src/meters.cpp
   src/accounts.cpp
 )
 target_include_directories(hoa_backend PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
