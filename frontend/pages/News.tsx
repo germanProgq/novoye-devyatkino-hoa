@@ -249,13 +249,14 @@ const News: React.FC = () => {
   const handleAdminEdit = (item: NewsItem) => {
     setAdminActionError(null);
     const hash = getNewsCardId(item.id);
-    navigate('/admin', {
+    navigate('/admin?tab=news', {
       state: {
         editNewsId: item.id,
         newsPrefill: item,
         restoreFilter: filter,
         restorePage: page,
         returnHash: hash,
+        targetTab: 'news',
       },
     });
   };

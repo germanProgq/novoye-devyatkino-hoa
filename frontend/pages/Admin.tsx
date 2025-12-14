@@ -5,6 +5,8 @@ import {
   ContributionItem,
   ContributionSummary,
   ContributionSuggestion,
+  AccountPersonLink,
+  AccountUser,
   DebtorItem,
   DocumentItem,
   NewsItem,
@@ -323,6 +325,7 @@ type AdminNavigationState = {
   restoreFilter?: string;
   restorePage?: number;
   returnHash?: string;
+  targetTab?: AdminTab;
 };
 
 type NewsReturnState = {
@@ -332,9 +335,28 @@ type NewsReturnState = {
   returnHash?: string;
 };
 
+type AdminTab = 'overview' | 'accounts' | 'payments' | 'debtors' | 'news' | 'documents';
+
+const ADMIN_TABS: { id: AdminTab; label: string; icon: string }[] = [
+  { id: 'overview', label: 'Обзор', icon: 'dashboard' },
+  { id: 'accounts', label: 'Аккаунты', icon: 'link' },
+  { id: 'payments', label: 'Взносы', icon: 'payments' },
+  { id: 'debtors', label: 'Должники', icon: 'warning' },
+  { id: 'news', label: 'Новости', icon: 'campaign' },
+  { id: 'documents', label: 'Документы', icon: 'folder_open' },
+];
+
+const normalizeAdminTab = (value?: string | null): AdminTab => {
+  const tab = ADMIN_TABS.find((item) => item.id === value);
+  return tab ? tab.id : 'overview';
+};
+
 const Admin: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<AdminTab>(() =>
+    normalizeAdminTab(new URLSearchParams(location.search).get('tab'))
+  );
   const [debtors, setDebtors] = useState<DebtorItem[]>([]);
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [newsPage, setNewsPage] = useState(0);
@@ -377,6 +399,17 @@ const Admin: React.FC = () => {
   const [debtorSaving, setDebtorSaving] = useState(false);
   const [debtorError, setDebtorError] = useState<string | null>(null);
   const [debtorDebtInputs, setDebtorDebtInputs] = useState<Record<string, string>>({});
+  const [accountUsers, setAccountUsers] = useState<AccountUser[]>([]);
+  const [accountLinks, setAccountLinks] = useState<AccountPersonLink[]>([]);
+  const [accountLinksLoading, setAccountLinksLoading] = useState(false);
+  const [accountLinkSaving, setAccountLinkSaving] = useState(false);
+  const [accountLinkError, setAccountLinkError] = useState<string | null>(null);
+  const [knownPeople, setKnownPeople] = useState<ContributionSuggestion[]>([]);
+  const [knownPeopleLoading, setKnownPeopleLoading] = useState(false);
+  const [linkPersonQuery, setLinkPersonQuery] = useState('');
+  const [linkSelectedPerson, setLinkSelectedPerson] = useState<ContributionSuggestion | null>(null);
+  const [linkSelectedUser, setLinkSelectedUser] = useState('');
+  const [linkSuggestionsOpen, setLinkSuggestionsOpen] = useState(false);
   const [contributions, setContributions] = useState<ContributionItem[]>([]);
   const [contributionSummary, setContributionSummary] = useState<ContributionSummary>({
     totalAmount: 0,
@@ -410,6 +443,20 @@ const Admin: React.FC = () => {
   const [cashflowChartSize, setCashflowChartSize] = useState({ width: 0, height: 0 });
   const debtUpdateTimers = useRef<Record<string, number>>({});
   const pendingDebtUpdates = useRef<Record<string, number>>({});
+  const setTab = useCallback(
+    (next: AdminTab, options?: { replace?: boolean }) => {
+      setActiveTab(next);
+      const params = new URLSearchParams(location.search);
+      if (params.get('tab') !== next) {
+        params.set('tab', next);
+        navigate(
+          { pathname: location.pathname, search: `?${params.toString()}`, hash: location.hash },
+          { replace: options?.replace ?? true }
+        );
+      }
+    },
+    [location.hash, location.pathname, location.search, navigate]
+  );
   const loadNewsCount = useCallback(async (fallbackCount?: number) => {
     const endpoints = ['/api/news/count', '/news/count'];
     for (const path of endpoints) {
@@ -432,6 +479,13 @@ const Admin: React.FC = () => {
     }
     return null;
   }, []);
+
+  useEffect(() => {
+    const tabFromUrl = normalizeAdminTab(new URLSearchParams(location.search).get('tab'));
+    if (tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [activeTab, location.search]);
 
   const mapApiDoc = (doc: any): DocumentItem => {
     const normalizedType = normalizeType(doc.type || '');
@@ -481,6 +535,31 @@ const Admin: React.FC = () => {
     updatedAt: item.updatedAt || item.updated_at || '',
   });
 
+  const mapApiAccountUser = (item: any): AccountUser => ({
+    username: item.username || '',
+    role: typeof item.role === 'string' ? item.role : '',
+  });
+
+  const mapApiAccountLink = (item: any): AccountPersonLink => ({
+    id: item.id ?? '',
+    username: item.username || '',
+    displayName: item.displayName || item.name || item.rawInput || '',
+    normalizedName: item.normalizedName || item.normalized_name || '',
+    apartment: item.apartment || item.unit || undefined,
+    houses: Array.isArray(item.houses) ? item.houses.map((h: any) => String(h)) : [],
+    createdAt: item.createdAt || item.created_at || undefined,
+    updatedAt: item.updatedAt || item.updated_at || undefined,
+  });
+
+  const mapApiPerson = (item: any): ContributionSuggestion => ({
+    rawInput: item.rawInput || '',
+    displayName: item.displayName || item.name || '',
+    normalizedName: item.normalizedName || item.normalized_name || '',
+    apartment: item.apartment || item.unit || undefined,
+    houses: Array.isArray(item.houses) ? item.houses.map((h: any) => String(h)) : [],
+    source: item.source || '',
+  });
+
   const normalizeContributionSummaryData = (summary: any): ContributionSummary => ({
     totalAmount: typeof summary?.totalAmount === 'number' ? summary.totalAmount : Number(summary?.totalAmount) || 0,
     contributionCount: typeof summary?.contributionCount === 'number' ? summary.contributionCount : Number(summary?.contributionCount) || 0,
@@ -503,6 +582,64 @@ const Admin: React.FC = () => {
       console.error(err);
     }
   };
+
+  const loadAccountUsers = useCallback(async () => {
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/auth/users`);
+      if (!response.ok) return;
+      const payload = await response.json();
+      const list = Array.isArray(payload.users) ? payload.users.map(mapApiAccountUser) : [];
+      setAccountUsers(list);
+      setLinkSelectedUser((prev) => {
+        if (prev) return prev;
+        const candidate = list.find((u) => u.role === 'user') || list[0];
+        return candidate?.username || '';
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  const loadAccountLinks = useCallback(async () => {
+    setAccountLinksLoading(true);
+    setAccountLinkError(null);
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/accounts/links`);
+      if (!response.ok) {
+        throw new Error(`API responded with ${response.status}`);
+      }
+      const payload = await response.json();
+      const list = Array.isArray(payload.links) ? payload.links.map(mapApiAccountLink) : [];
+      setAccountLinks(list);
+    } catch (err) {
+      console.error(err);
+      setAccountLinkError('Не удалось загрузить привязки аккаунтов');
+    } finally {
+      setAccountLinksLoading(false);
+    }
+  }, []);
+
+  const loadKnownPeople = useCallback(async () => {
+    setKnownPeopleLoading(true);
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/contributions/people`);
+      if (!response.ok) {
+        throw new Error(`API responded with ${response.status}`);
+      }
+      const payload = await response.json();
+      const list = Array.isArray(payload.people) ? payload.people.map(mapApiPerson) : [];
+      const unique = new Map<string, ContributionSuggestion>();
+      list.forEach((item) => {
+        const key = `${item.normalizedName}-${item.apartment ?? ''}`;
+        if (!unique.has(key)) unique.set(key, item);
+      });
+      setKnownPeople(Array.from(unique.values()));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setKnownPeopleLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const loadNews = async () => {
@@ -567,23 +704,38 @@ const Admin: React.FC = () => {
 
   useEffect(() => {
     const state = location.state as AdminNavigationState | null;
-    if (!state?.editNewsId) return;
+    if (!state) return;
 
-    setPendingNewsEditId(state.editNewsId);
-    setNewsReturnState({
-      highlightNewsId: state.editNewsId,
-      restoreFilter: state.restoreFilter,
-      restorePage: state.restorePage,
-      returnHash: state.returnHash,
-    });
-    if (state.newsPrefill) {
-      setPrefillNewsItem(state.newsPrefill);
+    if (state.targetTab) {
+      setTab(normalizeAdminTab(state.targetTab), { replace: true });
     }
-    navigate(location.pathname, { replace: true });
-  }, [location.pathname, location.state, navigate]);
+
+    if (state.editNewsId) {
+      setTab('news', { replace: true });
+      setPendingNewsEditId(state.editNewsId);
+      setNewsReturnState({
+        highlightNewsId: state.editNewsId,
+        restoreFilter: state.restoreFilter,
+        restorePage: state.restorePage,
+        returnHash: state.returnHash,
+      });
+      if (state.newsPrefill) {
+        setPrefillNewsItem(state.newsPrefill);
+      }
+    }
+
+    navigate(
+      { pathname: location.pathname, search: location.search, hash: location.hash },
+      { replace: true }
+    );
+  }, [location.hash, location.pathname, location.search, location.state, navigate, setTab]);
 
   useEffect(() => {
     if (!pendingNewsEditId) return;
+    if (activeTab !== 'news') {
+      setTab('news', { replace: true });
+      return;
+    }
     const existing = newsItems.find((item) => item.id === pendingNewsEditId);
     const fallback = prefillNewsItem && prefillNewsItem.id === pendingNewsEditId ? prefillNewsItem : null;
     const candidate = existing || fallback;
@@ -592,7 +744,7 @@ const Admin: React.FC = () => {
     scrollToNewsSection();
     setPendingNewsEditId(null);
     setPrefillNewsItem(null);
-  }, [newsItems, newsReturnState, pendingNewsEditId, prefillNewsItem]);
+  }, [activeTab, newsItems, newsReturnState, pendingNewsEditId, prefillNewsItem, setTab]);
 
   useEffect(() => {
     const totalPages = Math.ceil(newsItems.length / ADMIN_NEWS_PAGE_SIZE);
@@ -692,6 +844,12 @@ const Admin: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    loadAccountUsers();
+    loadAccountLinks();
+    loadKnownPeople();
+  }, [loadAccountUsers, loadAccountLinks, loadKnownPeople]);
+
+  useEffect(() => {
     if (suppressSuggestions) {
       setContributionSuggestions([]);
       setParsingInput(false);
@@ -764,6 +922,7 @@ const Admin: React.FC = () => {
   }, [isNewContribution]);
 
   useEffect(() => {
+    if (activeTab !== 'overview') return;
     const el = cashflowChartRef.current;
     if (!el) return;
 
@@ -777,7 +936,7 @@ const Admin: React.FC = () => {
     const observer = new ResizeObserver(updateSize);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [activeTab]);
 
   const newsTagOptions = useMemo(() => {
     const unique = new Set<string>();
@@ -798,6 +957,18 @@ const Admin: React.FC = () => {
     set.set(canonicalCategory(docCategory), normalizeCategoryDisplay(docCategory));
     return Array.from(set.values()).sort((a, b) => a.localeCompare(b, 'ru'));
   }, [documents, docCategory]);
+
+  const filteredKnownPeople = useMemo(() => {
+    const query = linkPersonQuery.trim().toLowerCase();
+    if (!query) return knownPeople.slice(0, 8);
+    return knownPeople
+      .filter((person) => {
+        const name = (person.displayName || '').toLowerCase();
+        const apt = (person.apartment || '').toLowerCase();
+        return name.includes(query) || (apt && query && apt.includes(query));
+      })
+      .slice(0, 8);
+  }, [knownPeople, linkPersonQuery]);
 
   const adminNewsPageCount = Math.ceil(newsItems.length / ADMIN_NEWS_PAGE_SIZE);
   const adminNewsPageItems = useMemo(() => {
@@ -1002,6 +1173,78 @@ const Admin: React.FC = () => {
       setDebtorError('Не удалось сохранить должника');
     } finally {
       setDebtorSaving(false);
+    }
+  };
+
+  const handleLinkPersonSelect = (person: ContributionSuggestion) => {
+    setLinkSelectedPerson(person);
+    const formatted = formatSuggestionInput(person) || person.displayName || person.normalizedName || '';
+    setLinkPersonQuery(formatted);
+    setLinkSuggestionsOpen(false);
+  };
+
+  const handleAccountLinkSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const selectedUser = linkSelectedUser.trim();
+    const personName = (linkSelectedPerson?.displayName || linkPersonQuery).trim();
+    const normalizedName = (linkSelectedPerson?.normalizedName || '').trim();
+    if (!personName && !normalizedName) {
+      setAccountLinkError('Выберите жильца из списка');
+      return;
+    }
+    if (!selectedUser) {
+      setAccountLinkError('Выберите аккаунт пользователя');
+      return;
+    }
+
+    setAccountLinkError(null);
+    setAccountLinkSaving(true);
+    const payload: Record<string, unknown> = {
+      username: selectedUser,
+      displayName: personName || normalizedName,
+    };
+    if (normalizedName) payload.normalizedName = normalizedName;
+    if (linkSelectedPerson?.apartment) payload.apartment = linkSelectedPerson.apartment;
+    if (linkSelectedPerson?.houses?.length) payload.houses = linkSelectedPerson.houses;
+
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/accounts/links`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `API responded with ${response.status}`);
+      }
+      const saved = mapApiAccountLink(await response.json());
+      setAccountLinks((prev) => {
+        const existingIdx = prev.findIndex((l) => l.id === saved.id || l.normalizedName === saved.normalizedName);
+        if (existingIdx !== -1) {
+          const next = [...prev];
+          next[existingIdx] = saved;
+          return next;
+        }
+        return [saved, ...prev];
+      });
+      setLinkPersonQuery('');
+      setLinkSelectedPerson(null);
+    } catch (err) {
+      console.error(err);
+      setAccountLinkError('Не удалось сохранить связь аккаунта и жильца');
+    } finally {
+      setAccountLinkSaving(false);
+    }
+  };
+
+  const handleAccountLinkRemove = async (id: string) => {
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/accounts/links/${id}`, { method: 'DELETE' });
+      if (!response.ok && response.status !== 204) throw new Error('Failed to delete link');
+      setAccountLinks((prev) => prev.filter((link) => link.id !== id));
+    } catch (err) {
+      console.error(err);
+      setAccountLinkError('Не удалось удалить связь аккаунта');
     }
   };
 
@@ -1318,7 +1561,7 @@ const Admin: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-[var(--color-ink)]">Админ-панель</h1>
           <p className="text-[var(--color-ink-soft)]">
-            Управляйте новостями, задолженностями и документами в одном окне.
+            Управляйте новостями, задолженностями и документами по вкладкам.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1333,6 +1576,26 @@ const Admin: React.FC = () => {
         </div>
       </header>
 
+      <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-2">
+        {ADMIN_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'bg-primary text-white shadow-sm'
+                : 'bg-white border border-[color:var(--color-info-border)] text-[var(--color-ink-soft)] hover:bg-[var(--color-info-surface)] hover:text-[var(--color-ink)]'
+            }`}
+          >
+            <span className="material-symbols-outlined text-base">{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'overview' && (
+        <>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         <div className="bg-[var(--color-info-surface)] p-4 rounded-xl border border-[color:var(--color-info-border)] shadow-sm backdrop-blur-sm">
           <div className="flex items-center justify-between">
@@ -1432,6 +1695,175 @@ const Admin: React.FC = () => {
         </div>
       </div>
 
+      </>
+      )}
+
+      {activeTab === 'accounts' && (
+      <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-6 backdrop-blur-sm relative overflow-visible z-40">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-semibold text-[var(--color-ink)]">Привязка жильцов к аккаунтам</h3>
+            <p className="text-sm text-[var(--color-ink-soft)]">Выберите жильца из истории и закрепите за учетной записью портала.</p>
+          </div>
+          <span className="hidden md:inline-flex text-xs text-[var(--color-ink-soft)] px-3 py-1 rounded-full bg-white border border-[color:var(--color-info-border)]">
+            {accountLinks.length} связей
+          </span>
+        </div>
+
+        {accountLinkError && (
+          <div className="mb-3 text-sm text-accent bg-accent/10 border border-accent/30 rounded-lg px-3 py-2">
+            {accountLinkError}
+          </div>
+        )}
+
+        <form
+          onSubmit={handleAccountLinkSubmit}
+          className="grid grid-cols-1 lg:grid-cols-[2fr,1fr,auto] gap-3 items-start lg:items-end"
+        >
+          <div className="space-y-2 min-w-0">
+            <label className="text-sm text-[var(--color-ink-soft)]">Жилец (поиск по истории взносов/долгов)</label>
+            <div className="relative z-40">
+              <input
+                type="text"
+                value={linkPersonQuery}
+                onFocus={() => setLinkSuggestionsOpen(true)}
+                onBlur={() => setTimeout(() => setLinkSuggestionsOpen(false), 120)}
+                onChange={(e) => {
+                  setLinkPersonQuery(e.target.value);
+                  setLinkSelectedPerson(null);
+                  setLinkSuggestionsOpen(true);
+                }}
+                className="w-full h-11 border border-[color:var(--color-info-border)] rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white text-[var(--color-ink)]"
+                placeholder={knownPeopleLoading ? 'Загрузка списка...' : 'Например, Ковалёва или Кв. 14'}
+              />
+              {linkSuggestionsOpen && filteredKnownPeople.length > 0 && (
+                <div className="absolute z-50 mt-1 w-full bg-white border border-[color:var(--color-info-border)] rounded-lg shadow-lg max-h-64 overflow-y-auto divide-y divide-[color:var(--color-info-border)]">
+                  {filteredKnownPeople.slice(0, 5).map((person) => (
+                    <button
+                      key={`${person.normalizedName}-${person.apartment ?? 'na'}`}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleLinkPersonSelect(person)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-info-surface)]"
+                    >
+                      <div className="font-medium text-[var(--color-ink)]">{person.displayName || 'Без имени'}</div>
+                      <div className="flex flex-wrap gap-2 text-[11px] text-[var(--color-ink-soft)] mt-1">
+                        <span className="px-2 py-0.5 rounded-full bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
+                          {person.apartment ? `Кв. ${person.apartment}` : 'Без квартиры'}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
+                          {person.houses?.length ? `Дом: ${person.houses.join(', ')}` : 'Дом не указан'}
+                        </span>
+                        {person.source && (
+                          <span className="px-2 py-0.5 rounded-full bg-white border border-[color:var(--color-info-border)]">
+                            {person.source}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {linkSelectedPerson && (
+              <div className="text-xs text-[var(--color-ink-soft)] flex flex-wrap items-center gap-2">
+                <span className="px-2 py-0.5 rounded-full bg-white border border-[color:var(--color-info-border)] text-[var(--color-ink)]">
+                  {linkSelectedPerson.displayName || 'Без имени'}
+                </span>
+                {linkSelectedPerson.apartment && (
+                  <span className="px-2 py-0.5 rounded-full bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
+                    Кв. {linkSelectedPerson.apartment}
+                  </span>
+                )}
+                {linkSelectedPerson.houses?.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
+                    Дом: {linkSelectedPerson.houses.join(', ')}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="space-y-2 min-w-0">
+            <label className="text-sm text-[var(--color-ink-soft)]">Аккаунт</label>
+            <select
+              value={linkSelectedUser}
+              onChange={(e) => setLinkSelectedUser(e.target.value)}
+              className="w-full h-11 border border-[color:var(--color-info-border)] rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white text-[var(--color-ink)]"
+            >
+              {accountUsers.length === 0 && <option value="">Нет пользователей</option>}
+              {accountUsers.map((user) => (
+                <option key={user.username} value={user.username}>
+                  {user.username} {user.role === 'admin' ? '(админ)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-end justify-start lg:justify-end">
+            <button
+              type="submit"
+              disabled={accountLinkSaving || accountUsers.length === 0}
+              className="w-full lg:w-auto px-5 h-11 rounded-lg text-sm font-semibold bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-60 whitespace-nowrap"
+            >
+              <span className="material-symbols-outlined text-base">link</span>
+              {accountLinkSaving ? 'Сохраняем...' : 'Привязать аккаунт'}
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-6 divide-y divide-[color:var(--color-info-border)]">
+          {accountLinksLoading && (
+            <div className="text-sm text-[var(--color-ink-soft)] bg-white border border-[color:var(--color-info-border)] rounded-lg px-3 py-3">
+              Загрузка текущих связей...
+            </div>
+          )}
+          {!accountLinksLoading && accountLinks.length === 0 && (
+            <div className="text-sm text-[var(--color-ink-soft)] bg-white border border-[color:var(--color-info-border)] rounded-lg px-3 py-3">
+              Пока нет привязанных аккаунтов.
+            </div>
+          )}
+          {accountLinks.map((link) => {
+            return (
+              <div key={link.id} className="py-3 flex flex-wrap items-start md:items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-[var(--color-ink)]">
+                    {link.displayName || link.normalizedName || 'Без имени'}
+                  </p>
+                  <p className="text-xs text-[var(--color-ink-soft)] flex flex-wrap items-center gap-2">
+                    <span className="px-2 py-0.5 bg-white rounded border border-[color:var(--color-info-border)]">
+                      {link.username}
+                    </span>
+                    {link.apartment && (
+                      <span className="px-2 py-0.5 bg-[var(--color-info-surface)] rounded border border-[color:var(--color-info-border)]">
+                        Кв. {link.apartment}
+                      </span>
+                    )}
+                    {link.houses?.length > 0 && (
+                      <span className="px-2 py-0.5 bg-[var(--color-info-surface)] rounded border border-[color:var(--color-info-border)]">
+                        Дом: {link.houses.join(', ')}
+                      </span>
+                    )}
+                    {link.updatedAt && (
+                      <span className="text-[var(--color-ink-soft)]">
+                        Обновлено {formatDateWithShortMonth(link.updatedAt)}
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleAccountLinkRemove(link.id)}
+                  className="px-3 py-2 rounded-lg text-sm text-accent border border-[color:var(--color-info-border)] bg-white hover:bg-accent/10 transition-colors ml-auto md:ml-0"
+                >
+                  Удалить
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      )}
+
+      {activeTab === 'payments' && (
       <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-6 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -1450,7 +1882,7 @@ const Admin: React.FC = () => {
         )}
 
         <form onSubmit={handleContributionSubmit} className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div className="md:col-span-2 space-y-1">
               <label className="text-sm text-[var(--color-ink-soft)]">ФИО / квартира</label>
               <div className="space-y-2">
@@ -1639,7 +2071,9 @@ const Admin: React.FC = () => {
           ))}
         </div>
       </div>
+      )}
 
+      {activeTab === 'debtors' && (
       <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-6 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -1819,6 +2253,9 @@ const Admin: React.FC = () => {
         </div>
       </div>
 
+      )}
+
+      {activeTab === 'news' && (
       <div ref={newsSectionRef} className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-6 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-4">
@@ -2084,6 +2521,9 @@ const Admin: React.FC = () => {
         </div>
       </div>
 
+      )}
+
+      {activeTab === 'documents' && (
       <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-6 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -2241,6 +2681,7 @@ const Admin: React.FC = () => {
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 };

@@ -5,12 +5,21 @@ export type SessionUser = {
   role: UserRole;
 };
 
+type SessionMeta = {
+  accessExpiresIn?: number;
+  refreshExpiresIn?: number;
+};
+
 const SESSION_STORAGE_KEY = 'hoa_session_user';
 const API_BASE_URL = (
   import.meta.env.VITE_BACKEND_URL
     ? String(import.meta.env.VITE_BACKEND_URL)
     : 'http://localhost:8080'
 ).replace(/\/$/, '');
+const DEFAULT_REFRESH_INTERVAL_SECONDS = 10 * 60;
+const REFRESH_LEEWAY_SECONDS = 10;
+
+let refreshTimer: number | null = null;
 
 const parseUser = (raw: any): SessionUser | null => {
   if (!raw || typeof raw !== 'object') return null;
@@ -19,6 +28,40 @@ const parseUser = (raw: any): SessionUser | null => {
   if (!username) return null;
   if (role !== 'admin' && role !== 'user') return null;
   return { username, role: role as UserRole };
+};
+
+const normalizeExpiresIn = (value: any): number | undefined => {
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? num : undefined;
+};
+
+const parseSessionPayload = (payload: any): { user: SessionUser | null; meta: SessionMeta } => {
+  const user = parseUser(payload?.user);
+  const meta: SessionMeta = {
+    accessExpiresIn: normalizeExpiresIn(payload?.accessExpiresIn ?? payload?.access_ttl ?? payload?.accessTtl),
+    refreshExpiresIn: normalizeExpiresIn(payload?.refreshExpiresIn ?? payload?.refresh_ttl ?? payload?.refreshTtl),
+  };
+  return { user, meta };
+};
+
+const stopRefreshTimer = () => {
+  if (typeof window === 'undefined') return;
+  if (refreshTimer !== null) {
+    window.clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+};
+
+const scheduleRefresh = (meta?: SessionMeta) => {
+  if (typeof window === 'undefined') return;
+  stopRefreshTimer();
+  const ttlSeconds = meta?.accessExpiresIn;
+  const delaySeconds = typeof ttlSeconds === 'number'
+    ? Math.max(5, ttlSeconds - REFRESH_LEEWAY_SECONDS)
+    : DEFAULT_REFRESH_INTERVAL_SECONDS;
+  refreshTimer = window.setTimeout(() => {
+    void triggerRefresh();
+  }, delaySeconds * 1000);
 };
 
 export const getStoredSessionUser = (): SessionUser | null => {
@@ -53,9 +96,10 @@ export const loginWithPassword = async (username: string, password: string): Pro
     throw new Error(response.status === 401 ? 'Неверный логин или пароль' : 'Не удалось выполнить вход');
   }
   const payload = await response.json();
-  const user = parseUser(payload?.user);
+  const { user, meta } = parseSessionPayload(payload);
   if (!user) throw new Error('Ответ сервера не содержит пользователя');
   persistSessionUser(user);
+  scheduleRefresh(meta);
   return user;
 };
 
@@ -67,14 +111,20 @@ export const fetchCurrentUser = async (): Promise<SessionUser | null> => {
     });
     if (!response.ok) {
       if (response.status === 401) {
+        const refreshed = await refreshSession();
+        if (refreshed) return refreshed;
         persistSessionUser(null);
+        stopRefreshTimer();
         return null;
       }
       return getStoredSessionUser();
     }
     const payload = await response.json();
-    const user = parseUser(payload?.user);
-    if (user) persistSessionUser(user);
+    const { user, meta } = parseSessionPayload(payload);
+    if (user) {
+      persistSessionUser(user);
+      scheduleRefresh(meta);
+    }
     return user;
   } catch {
     return getStoredSessionUser();
@@ -88,12 +138,18 @@ export const refreshSession = async (): Promise<SessionUser | null> => {
       credentials: 'include',
     });
     if (!response.ok) {
-      if (response.status === 401) persistSessionUser(null);
+      if (response.status === 401) {
+        persistSessionUser(null);
+        stopRefreshTimer();
+      }
       return null;
     }
     const payload = await response.json();
-    const user = parseUser(payload?.user);
-    if (user) persistSessionUser(user);
+    const { user, meta } = parseSessionPayload(payload);
+    if (user) {
+      persistSessionUser(user);
+      scheduleRefresh(meta);
+    }
     return user;
   } catch {
     return null;
@@ -107,6 +163,12 @@ export const clearSession = async () => {
     // ignore logout errors
   }
   persistSessionUser(null);
+  stopRefreshTimer();
 };
 
 export const isAdmin = (user?: SessionUser | null) => user?.role === 'admin';
+
+async function triggerRefresh() {
+  const user = await refreshSession();
+  if (!user) stopRefreshTimer();
+}

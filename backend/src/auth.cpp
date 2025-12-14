@@ -397,6 +397,8 @@ void register_auth_routes(httplib::Server& server, AppContext& ctx, const std::s
     set_auth_cookies(tokens, ctx.jwt, res);
     json payload;
     payload["user"] = serialize_user(*user);
+    payload["accessExpiresIn"] = ctx.jwt.access_ttl.count();
+    payload["refreshExpiresIn"] = ctx.jwt.refresh_ttl.count();
     res.status = 200;
     res.set_content(payload.dump(), "application/json; charset=utf-8");
   });
@@ -430,6 +432,8 @@ void register_auth_routes(httplib::Server& server, AppContext& ctx, const std::s
     set_auth_cookies(tokens, ctx.jwt, res);
     json payload;
     payload["user"] = serialize_user(*user);
+    payload["accessExpiresIn"] = ctx.jwt.access_ttl.count();
+    payload["refreshExpiresIn"] = ctx.jwt.refresh_ttl.count();
     res.status = 200;
     res.set_content(payload.dump(), "application/json; charset=utf-8");
   });
@@ -445,6 +449,21 @@ void register_auth_routes(httplib::Server& server, AppContext& ctx, const std::s
     if (!claims) return;
     json payload;
     payload["user"] = serialize_user(*claims);
+    const auto now = std::chrono::system_clock::now();
+    const auto remaining = std::chrono::duration_cast<std::chrono::seconds>(claims->expires_at - now).count();
+    payload["accessExpiresIn"] = std::max<long long>(0, remaining);
+    res.status = 200;
+    res.set_content(payload.dump(), "application/json; charset=utf-8");
+    add_cors_headers(req, res, ctx);
+  });
+
+  server.Get(base + "/users", [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
+    json payload;
+    payload["users"] = json::array();
+    for (const auto& user : ctx.users) {
+      payload["users"].push_back(serialize_user(user));
+    }
     res.status = 200;
     res.set_content(payload.dump(), "application/json; charset=utf-8");
     add_cors_headers(req, res, ctx);

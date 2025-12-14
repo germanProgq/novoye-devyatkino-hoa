@@ -95,3 +95,17 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS account_people (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+  display_name TEXT,
+  normalized_name TEXT NOT NULL,
+  apartment TEXT,
+  houses TEXT[],
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS account_people_normalized_idx ON account_people (normalized_name);
+CREATE INDEX IF NOT EXISTS account_people_username_idx ON account_people (username);
