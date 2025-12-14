@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Area, AreaChart, CartesianGrid, Tooltip, XAxis } from 'recharts';
+import { Area, AreaChart, CartesianGrid, Scatter, Tooltip, TooltipContentProps, XAxis } from 'recharts';
 import {
   ContributionItem,
   ContributionSummary,
@@ -65,6 +65,7 @@ const API_BASE_URL = (
     ? String(import.meta.env.VITE_BACKEND_URL)
     : 'http://localhost:8080'
 ).replace(/\/$/, '');
+const apiFetch = (input: string, init: RequestInit = {}) => fetch(input, { credentials: 'include', ...init });
 
 const initialDocuments: DocumentItem[] = [];
 
@@ -96,6 +97,21 @@ const FULL_MONTHS_GENITIVE = [
   'октября',
   'ноября',
   'декабря',
+];
+
+const SHORT_MONTHS_GENITIVE = [
+  'янв',
+  'фев',
+  'мар',
+  'апр',
+  'май',
+  'июн',
+  'июл',
+  'авг',
+  'сен',
+  'окт',
+  'ноя',
+  'дек',
 ];
 
 const normalizeMonthLabel = (label: string) => {
@@ -156,12 +172,40 @@ const buildRecentMonthsWindow = (availableMonths: string[], limit = 12) => {
   return windowMonths;
 };
 
+const renderCashflowTooltip = ({ active, payload, label }: TooltipContentProps<number, string>) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const items = payload.filter((p) => typeof p.value === 'number');
+  if (items.length === 0) return null;
+  const monthLabel = normalizeMonthLabel(String(label || ''));
+  return (
+    <div className="rounded-lg border border-[color:var(--color-info-border)] bg-white/90 px-3 py-2 shadow-sm text-sm text-[var(--color-ink)]">
+      <div className="font-semibold mb-1">{monthLabel}</div>
+      {items.map((item) => (
+        <div key={item.name} className="flex items-center justify-between gap-3">
+          <span className="text-[var(--color-ink-soft)]">{item.name}</span>
+          <span className="font-semibold">{formatCurrency(Number(item.value))}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const formatDateWithFullMonth = (raw?: string) => {
   if (!raw) return '';
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return raw;
   const day = String(date.getDate()).padStart(2, '0');
   const monthName = FULL_MONTHS_GENITIVE[date.getMonth()] ?? '';
+  const year = date.getFullYear();
+  return `${day} ${monthName} ${year}`;
+};
+
+const formatDateWithShortMonth = (raw?: string) => {
+  if (!raw) return '';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const monthName = SHORT_MONTHS_GENITIVE[date.getMonth()] ?? '';
   const year = date.getFullYear();
   return `${day} ${monthName} ${year}`;
 };
@@ -202,6 +246,7 @@ const buildAssetUrl = (path?: string) => {
 };
 
 const formatNewsDate = (raw?: string) => formatDateWithFullMonth(raw);
+const formatNewsDateCompact = (raw?: string) => formatDateWithShortMonth(raw) || (typeof raw === 'string' ? raw : '');
 
 const parseMoneyInput = (value: string) => {
   if (!value.trim()) return NaN;
@@ -360,6 +405,7 @@ const Admin: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const newsImageInputRef = useRef<HTMLInputElement | null>(null);
   const newsSectionRef = useRef<HTMLDivElement | null>(null);
+  const newsFormRef = useRef<HTMLFormElement | null>(null);
   const cashflowChartRef = useRef<HTMLDivElement | null>(null);
   const [cashflowChartSize, setCashflowChartSize] = useState({ width: 0, height: 0 });
   const debtUpdateTimers = useRef<Record<string, number>>({});
@@ -368,7 +414,7 @@ const Admin: React.FC = () => {
     const endpoints = ['/api/news/count', '/news/count'];
     for (const path of endpoints) {
       try {
-        const response = await fetch(`${API_BASE_URL}${path}`);
+        const response = await apiFetch(`${API_BASE_URL}${path}`);
         if (!response.ok) continue;
         const payload = await response.json();
         const parsed = extractNewsCount(payload);
@@ -449,7 +495,7 @@ const Admin: React.FC = () => {
 
   const loadContributionSummary = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/contributions/summary`);
+      const response = await apiFetch(`${API_BASE_URL}/api/contributions/summary`);
       if (!response.ok) return;
       const payload = await response.json();
       setContributionSummary(normalizeContributionSummaryData(payload));
@@ -469,7 +515,7 @@ const Admin: React.FC = () => {
 
         for (const path of endpoints) {
           try {
-            const response = await fetch(`${API_BASE_URL}${path}`);
+            const response = await apiFetch(`${API_BASE_URL}${path}`);
             if (!response.ok) {
               lastError = new Error(`API responded with ${response.status}`);
               continue;
@@ -567,7 +613,7 @@ const Admin: React.FC = () => {
 
         for (const path of endpoints) {
           try {
-            const response = await fetch(`${API_BASE_URL}${path}`);
+            const response = await apiFetch(`${API_BASE_URL}${path}`);
             if (!response.ok) {
               lastError = new Error(`API responded with ${response.status}`);
               continue;
@@ -600,7 +646,7 @@ const Admin: React.FC = () => {
       setContributionLoading(true);
       setContributionError(null);
       try {
-        const response = await fetch(`${API_BASE_URL}/api/contributions`);
+        const response = await apiFetch(`${API_BASE_URL}/api/contributions`);
         if (!response.ok) {
           throw new Error(`API responded with ${response.status}`);
         }
@@ -627,7 +673,7 @@ const Admin: React.FC = () => {
       setDebtorsLoading(true);
       setDebtorError(null);
       try {
-        const response = await fetch(`${API_BASE_URL}/api/debtors`);
+        const response = await apiFetch(`${API_BASE_URL}/api/debtors`);
         if (!response.ok) {
           throw new Error(`API responded with ${response.status}`);
         }
@@ -670,7 +716,7 @@ const Admin: React.FC = () => {
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/contributions/parse`, {
+        const response = await apiFetch(`${API_BASE_URL}/api/contributions/parse`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ input: contributionForm.personInput }),
@@ -810,6 +856,7 @@ const Admin: React.FC = () => {
     }));
 
     const hasSummary = contributionSummary.byMonth.length > 0;
+    const currentMonthLabel = monthOrder[new Date().getMonth()] ?? '';
     const sourceRows = hasSummary ? summaryRows : baseRows;
     const sourceMap = collectMap(sourceRows);
     const windowMonths = buildRecentMonthsWindow(sourceRows.map((row) => row.month), 12);
@@ -819,7 +866,7 @@ const Admin: React.FC = () => {
       return {
         month,
         collected,
-        debt: totalDebt,
+        debt: month === currentMonthLabel ? totalDebt : null,
       };
     });
   }, [contributionSummary.byMonth, debtors]);
@@ -845,7 +892,7 @@ const Admin: React.FC = () => {
       if (amount === undefined) return;
       delete pendingDebtUpdates.current[id];
       try {
-        await fetch(`${API_BASE_URL}/api/debtors/${id}`, {
+        await apiFetch(`${API_BASE_URL}/api/debtors/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ debt: amount }),
@@ -885,7 +932,7 @@ const Admin: React.FC = () => {
 
   const handleDebtorRemove = async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/debtors/${id}`, { method: 'DELETE' });
+      const response = await apiFetch(`${API_BASE_URL}/api/debtors/${id}`, { method: 'DELETE' });
       if (!response.ok && response.status !== 204) throw new Error('Failed to delete debtor');
       setDebtors((prev) => prev.filter((r) => r.id !== id));
       setDebtorDebtInputs((prev) => {
@@ -922,7 +969,7 @@ const Admin: React.FC = () => {
     };
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/debtors`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/debtors`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1005,7 +1052,7 @@ const Admin: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/contributions`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/contributions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1030,7 +1077,7 @@ const Admin: React.FC = () => {
 
   const handleContributionRemove = async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/contributions/${id}`, { method: 'DELETE' });
+      const response = await apiFetch(`${API_BASE_URL}/api/contributions/${id}`, { method: 'DELETE' });
       if (!response.ok && response.status !== 204) throw new Error('Failed to delete');
       setContributions((prev) => prev.filter((c) => c.id !== id));
       await loadContributionSummary();
@@ -1058,9 +1105,9 @@ const Admin: React.FC = () => {
   };
 
   const scrollToNewsSection = () => {
-    if (newsSectionRef.current) {
-      newsSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    const target = newsFormRef.current || newsSectionRef.current;
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const clearNewsReturnState = () => {
@@ -1135,7 +1182,7 @@ const Admin: React.FC = () => {
     const method: 'POST' = 'POST';
 
     try {
-      const response = await fetch(endpoint, { method, body: formData });
+      const response = await apiFetch(endpoint, { method, body: formData });
       if (!response.ok) {
         throw new Error(`API responded with ${response.status}`);
       }
@@ -1189,11 +1236,12 @@ const Admin: React.FC = () => {
     if (newsImageInputRef.current) {
       newsImageInputRef.current.value = '';
     }
+    requestAnimationFrame(scrollToNewsSection);
   };
 
   const handleNewsRemove = async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/news/${id}`, { method: 'DELETE' });
+      const response = await apiFetch(`${API_BASE_URL}/api/news/${id}`, { method: 'DELETE' });
       if (!response.ok && response.status !== 204) throw new Error('Failed to delete');
       setNewsItems((prev) => prev.filter((n) => n.id !== id));
       const fallbackCount = Math.max((newsTotalCount || newsItems.length) - 1, 0);
@@ -1228,7 +1276,7 @@ const Admin: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/documents`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/documents`, {
         method: 'POST',
         body: formData,
       });
@@ -1255,7 +1303,7 @@ const Admin: React.FC = () => {
 
   const handleDocumentRemove = async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/documents/${id}/hide`, { method: 'POST' });
+      const response = await apiFetch(`${API_BASE_URL}/api/documents/${id}/hide`, { method: 'POST' });
       if (!response.ok) throw new Error('Failed to hide');
       setDocuments((prev) => prev.filter((doc) => doc.id !== id));
     } catch (err) {
@@ -1324,14 +1372,9 @@ const Admin: React.FC = () => {
               <AreaChart width={cashflowChartSize.width} height={cashflowChartSize.height} data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(175,194,215,0.45)" />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#3b4a3b', fontSize: 12 }} />
-                <Tooltip
-                  cursor={{ fill: 'rgba(175, 194, 215, 0.18)' }}
-                  contentStyle={{ borderRadius: '10px', border: '1px solid rgba(175, 194, 215, 0.45)', boxShadow: '0 10px 24px rgba(47, 58, 42, 0.14)' }}
-                  formatter={(value: number) => formatCurrency(value)}
-                  labelFormatter={(label) => `Месяц: ${label}`}
-                />
+                <Tooltip cursor={{ fill: 'rgba(175, 194, 215, 0.18)' }} content={renderCashflowTooltip} />
                 <Area type="monotone" dataKey="collected" stroke="var(--color-forest)" fill="rgba(47,58,42,0.18)" strokeWidth={2.2} name="Собрано" />
-                <Area type="monotone" dataKey="debt" stroke="var(--color-brick)" fill="rgba(180,99,59,0.16)" strokeWidth={2.2} name="Долг" />
+                <Scatter dataKey="debt" name="Долг" data={chartData} fill="var(--color-brick)" stroke="var(--color-brick)" />
               </AreaChart>
             ) : (
               <div className="h-full grid place-items-center text-sm text-[var(--color-ink-soft)]">
@@ -1543,11 +1586,11 @@ const Admin: React.FC = () => {
               />
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 justify-end">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 justify-end">
             <button
               type="submit"
               disabled={contributionLoading}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center gap-2 disabled:opacity-60"
+              className="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
             >
               <span className="material-symbols-outlined text-base">add_circle</span>
               {contributionLoading ? 'Сохраняем...' : 'Добавить взнос'}
@@ -1583,11 +1626,11 @@ const Admin: React.FC = () => {
                   {item.note && <span className="line-clamp-1">{item.note}</span>}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 w-full md:w-auto">
                 <span className="font-semibold text-[var(--color-ink)]">{formatCurrency(item.amount)}</span>
                 <button
                   onClick={() => handleContributionRemove(item.id)}
-                  className="px-2.5 py-1.5 rounded-lg text-sm text-accent border border-[color:var(--color-info-border)] bg-white hover:bg-accent/10 transition-colors"
+                  className="ml-auto md:ml-0 px-2.5 py-1.5 rounded-lg text-sm text-accent border border-[color:var(--color-info-border)] bg-white hover:bg-accent/10 transition-colors"
                 >
                   Удалить
                 </button>
@@ -1685,11 +1728,11 @@ const Admin: React.FC = () => {
               />
             </div>
           </form>
-          <div className="flex flex-wrap items-center justify-end gap-3 mt-3">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-end gap-3 mt-3">
             <button
               onClick={handleDebtorSubmit}
               disabled={debtorSaving}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center gap-2 disabled:opacity-60"
+              className="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
             >
               <span className="material-symbols-outlined text-base">add_circle</span>
               {debtorSaving ? 'Сохраняем...' : 'Добавить должника'}
@@ -1800,7 +1843,7 @@ const Admin: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleNewsSubmit} className="space-y-3">
+          <form ref={newsFormRef} onSubmit={handleNewsSubmit} className="space-y-3 scroll-mt-24 lg:scroll-mt-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-sm text-[var(--color-ink-soft)]">Заголовок</label>
@@ -1926,11 +1969,11 @@ const Admin: React.FC = () => {
               />
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end">
               <button
                 type="submit"
                 disabled={newsSaving}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center gap-2 disabled:opacity-70"
+                className="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-70"
               >
                 <span className="material-symbols-outlined text-base">{editingNewsId ? 'save' : 'add_circle'}</span>
                 {newsSaving ? 'Сохранение...' : editingNewsId ? 'Сохранить изменения' : 'Опубликовать новость'}
@@ -1990,10 +2033,13 @@ const Admin: React.FC = () => {
             {!newsLoading && !newsError && adminNewsPageItems.map((item) => {
               const img = getNewsImage(item.image || item.imageUrl);
               const badgeTone = getTagTone(item.tag);
-              const publishedAt = item.date || formatNewsDate(item.createdAt) || '—';
+              const publishedAt = formatNewsDateCompact(item.createdAt || item.date) || item.date || '—';
               return (
-                <div key={item.id} className="flex gap-3 bg-white/70 border border-[color:var(--color-info-border)] rounded-lg p-3">
-                  <div className="w-20 h-20 rounded-lg overflow-hidden bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)] shrink-0">
+                <div
+                  key={item.id}
+                  className="flex flex-col sm:flex-row gap-3 bg-white/80 border border-[color:var(--color-info-border)] rounded-xl p-4 shadow-[0_6px_16px_rgba(0,0,0,0.05)]"
+                >
+                  <div className="w-full h-40 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)] shrink-0">
                     <img
                       src={img}
                       alt={item.title}
@@ -2001,38 +2047,35 @@ const Admin: React.FC = () => {
                       onError={handleNewsImageError}
                     />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold text-white ${badgeTone}`}>
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold text-white ${badgeTone}`}>
                           {item.tag || 'Без тега'}
                         </span>
-                        <span className="text-xs text-[var(--color-ink-soft)]">{publishedAt}</span>
-                        {img === defaultNewsImage && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)] text-[var(--color-ink-soft)]">
-                            Герб по умолчанию
-                          </span>
-                        )}
+                        <span className="text-xs text-[var(--color-ink-soft)] whitespace-nowrap leading-tight">
+                          {publishedAt}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 sm:gap-2 ml-auto">
                         <button
                           onClick={() => handleNewsEdit(item)}
-                          className="p-1.5 rounded-md text-[var(--color-ink-soft)] hover:text-primary hover:bg-[var(--color-info-surface)]"
+                          className="p-2 rounded-full border border-[color:var(--color-info-border)] bg-white text-[var(--color-ink-soft)] hover:text-primary hover:border-primary hover:bg-[var(--color-info-surface)] transition"
                           title="Редактировать"
                         >
-                          <span className="material-symbols-outlined text-sm">edit</span>
+                          <span className="material-symbols-outlined text-base leading-none">edit_square</span>
                         </button>
                         <button
                           onClick={() => handleNewsRemove(item.id)}
-                          className="p-1.5 rounded-md text-[var(--color-ink-soft)] hover:text-accent hover:bg-accent/10"
+                          className="p-2 rounded-full border border-[color:var(--color-info-border)] bg-white text-[var(--color-ink-soft)] hover:text-accent hover:border-accent hover:bg-accent/10 transition"
                           title="Удалить"
                         >
-                          <span className="material-symbols-outlined text-sm">delete</span>
+                          <span className="material-symbols-outlined text-base leading-none">delete</span>
                         </button>
                       </div>
                     </div>
-                    <p className="font-semibold text-[var(--color-ink)] line-clamp-1">{item.title}</p>
-                    <p className="text-sm text-[var(--color-ink-soft)] line-clamp-2">{item.summary}</p>
+                    <p className="font-semibold text-[var(--color-ink)] leading-snug line-clamp-2">{item.title}</p>
+                    <p className="text-sm text-[var(--color-ink-soft)] leading-relaxed line-clamp-3">{item.summary}</p>
                   </div>
                 </div>
               );
@@ -2149,11 +2192,11 @@ const Admin: React.FC = () => {
               placeholder="Краткое описание для жильцов"
             />
           </div>
-          <div className="md:col-span-4 flex flex-col md:flex-row items-start md:items-center gap-3 mt-2 w-full justify-end">
+          <div className="md:col-span-4 flex flex-col md:flex-row items-stretch md:items-center gap-3 mt-2 w-full justify-end">
             <button
               type="submit"
               disabled={docSaving}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center gap-2 disabled:opacity-70 self-end md:self-auto"
+              className="w-full md:w-auto px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-70 self-stretch md:self-auto"
             >
               <span className="material-symbols-outlined text-base">upload</span>
               {docSaving ? 'Загрузка...' : 'Загрузить документ'}
@@ -2190,7 +2233,7 @@ const Admin: React.FC = () => {
               </div>
               <button
                 onClick={() => handleDocumentRemove(doc.id)}
-                className="px-3 py-2 rounded-lg text-sm text-accent border border-[color:var(--color-info-border)] bg-white hover:bg-accent/10 transition-colors self-start md:self-auto"
+                className="px-3 py-2 rounded-lg text-sm text-accent border border-[color:var(--color-info-border)] bg-white hover:bg-accent/10 transition-colors self-end md:self-auto ml-auto md:ml-0"
               >
                 Удалить
               </button>

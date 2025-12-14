@@ -88,3 +88,10 @@ INSERT INTO debtors (id, display_name, normalized_name, apartment, houses, phone
 ('debtor-sample-1', 'Петрова', 'петрова', '22', ARRAY['75А'], '+7 900 000-00-00', 5200.00, 'Планирует оплатить до конца месяца', NOW() - INTERVAL '1 day'),
 ('debtor-sample-2', 'Ковалёва', 'ковалёва', '14', ARRAY['15','16'], '+7 911 111-11-11', 3100.00, 'Частичная оплата', NOW() - INTERVAL '3 days')
 ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS users (
+  username TEXT PRIMARY KEY,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

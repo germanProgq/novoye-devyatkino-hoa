@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "auth.h"
 #include "db.h"
 #include "json.hpp"
 
@@ -59,12 +60,6 @@ struct PersonGuess {
 };
 
 const std::vector<std::string> kMonthOrder = {"Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"};
-
-void add_cors_headers(httplib::Response& res) {
-  res.set_header("Access-Control-Allow-Origin", "*");
-  res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.set_header("Access-Control-Allow-Headers", "Content-Type");
-}
 
 std::string trim(const std::string& s) {
   const char* ws = " \t\n\r";
@@ -892,12 +887,13 @@ void register_contribution_routes(httplib::Server& server, AppContext& ctx, cons
   const std::string base = base_path.empty() ? "/api/contributions" : (base_path.front() == '/' ? base_path : "/" + base_path);
 
   // List
-  server.Get(base, [&](const httplib::Request&, httplib::Response& res) {
+  server.Get(base, [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     std::vector<Contribution> list;
     if (!fetch_contributions(ctx, list)) {
       res.status = 500;
       res.set_content("Failed to load contributions", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     json body;
@@ -910,11 +906,12 @@ void register_contribution_routes(httplib::Server& server, AppContext& ctx, cons
     }
 
     res.set_content(body.dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Parse helper
   server.Post(base + "/parse", [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     json body_json;
     const auto content_type = req.get_header_value("Content-Type");
     if (content_type.find("application/json") != std::string::npos) {
@@ -936,34 +933,37 @@ void register_contribution_routes(httplib::Server& server, AppContext& ctx, cons
     }
 
     res.set_content(payload.dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Summary for charts
-  server.Get(base + "/summary", [&](const httplib::Request&, httplib::Response& res) {
+  server.Get(base + "/summary", [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     json summary;
     if (!fetch_contribution_summary(ctx, summary)) {
       res.status = 500;
       res.set_content("Failed to build summary", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     res.set_content(summary.dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Known people list
-  server.Get(base + "/people", [&](const httplib::Request&, httplib::Response& res) {
+  server.Get(base + "/people", [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     const auto known = load_known_people(ctx);
     json payload;
     payload["people"] = json::array();
     for (const auto& k : known) payload["people"].push_back(person_guess_json(k));
     res.set_content(payload.dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Create contribution
   server.Post(base, [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     json body_json;
     const auto content_type = req.get_header_value("Content-Type");
     if (content_type.find("application/json") != std::string::npos) {
@@ -992,7 +992,7 @@ void register_contribution_routes(httplib::Server& server, AppContext& ctx, cons
     if (amount <= 0.0) {
       res.status = 400;
       res.set_content("Amount must be greater than zero", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
@@ -1026,7 +1026,7 @@ void register_contribution_routes(httplib::Server& server, AppContext& ctx, cons
     if (!insert_contribution(ctx, c)) {
       res.status = 500;
       res.set_content("Failed to save contribution", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
@@ -1034,20 +1034,21 @@ void register_contribution_routes(httplib::Server& server, AppContext& ctx, cons
     payload["resolved"] = person_guess_json(parsed);
     res.status = 201;
     res.set_content(payload.dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Delete contribution
   server.Delete(base + R"(/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     const auto& id = req.matches[1];
     if (!delete_contribution(ctx, id)) {
       res.status = 500;
       res.set_content("Failed to delete contribution", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     res.status = 204;
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 }
 
@@ -1055,23 +1056,25 @@ void register_debtor_routes(httplib::Server& server, AppContext& ctx, const std:
   const std::string base = base_path.empty() ? "/api/debtors" : (base_path.front() == '/' ? base_path : "/" + base_path);
 
   // List
-  server.Get(base, [&](const httplib::Request&, httplib::Response& res) {
+  server.Get(base, [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     std::vector<Debtor> debtors;
     if (!fetch_debtors(ctx, debtors)) {
       res.status = 500;
       res.set_content("Failed to load debtors", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     json body;
     body["debtors"] = json::array();
     for (const auto& d : debtors) body["debtors"].push_back(serialize_debtor(d));
     res.set_content(body.dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Create
   server.Post(base, [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     json body_json;
     const auto content_type = req.get_header_value("Content-Type");
     if (content_type.find("application/json") != std::string::npos) {
@@ -1090,30 +1093,30 @@ void register_debtor_routes(httplib::Server& server, AppContext& ctx, const std:
     }
 
     const auto houses_override = get_request_array(req, "houses", body_json);
-  if (!houses_override.empty()) parsed.houses = houses_override;
-  const std::string apartment = get_request_value(req, "apartment", body_json);
-  if (!apartment.empty()) parsed.apartment = apartment;
+    if (!houses_override.empty()) parsed.houses = houses_override;
+    const std::string apartment = get_request_value(req, "apartment", body_json);
+    if (!apartment.empty()) parsed.apartment = apartment;
 
-  const std::string phone = get_request_value(req, "phone", body_json);
-  const std::string note = get_request_value(req, "note", body_json);
-  const double debt = parse_amount(get_request_value(req, "debt", body_json));
+    const std::string phone = get_request_value(req, "phone", body_json);
+    const std::string note = get_request_value(req, "note", body_json);
+    const double debt = parse_amount(get_request_value(req, "debt", body_json));
 
-  Debtor d;
-  d.id = "debtor-" + unique_id().substr(0, 12);
-  d.display_name = parsed.display_name;  // can be empty
-  d.normalized_name = parsed.normalized_name.empty() ? canonical_key(d.display_name) : parsed.normalized_name;
-  d.apartment = parsed.apartment.value_or("");
-  d.houses = parsed.houses;
-  d.phone = phone;
-  d.debt = std::max(0.0, debt);
-  d.note = note;
+    Debtor d;
+    d.id = "debtor-" + unique_id().substr(0, 12);
+    d.display_name = parsed.display_name;  // can be empty
+    d.normalized_name = parsed.normalized_name.empty() ? canonical_key(d.display_name) : parsed.normalized_name;
+    d.apartment = parsed.apartment.value_or("");
+    d.houses = parsed.houses;
+    d.phone = phone;
+    d.debt = std::max(0.0, debt);
+    d.note = note;
 
-  if (d.normalized_name.empty() && !d.houses.empty()) {
-    d.normalized_name = canonical_house_key(d.houses);
-  }
+    if (d.normalized_name.empty() && !d.houses.empty()) {
+      d.normalized_name = canonical_house_key(d.houses);
+    }
 
-  // Attempt to merge with an existing debtor if the key or house matches.
-  std::vector<Debtor> existing_debtors;
+    // Attempt to merge with an existing debtor if the key or house matches.
+    std::vector<Debtor> existing_debtors;
     if (fetch_debtors(ctx, existing_debtors)) {
       const std::string new_house_key = canonical_house_key(d.houses);
       for (const auto& existing : existing_debtors) {
@@ -1142,13 +1145,13 @@ void register_debtor_routes(httplib::Server& server, AppContext& ctx, const std:
           if (!update_debtor(ctx, updated)) {
             res.status = 500;
             res.set_content("Failed to update debtor", "text/plain");
-            add_cors_headers(res);
+            add_cors_headers(req, res, ctx);
             return;
           }
 
           res.status = 200;
           res.set_content(serialize_debtor(updated).dump(), "application/json; charset=utf-8");
-          add_cors_headers(res);
+          add_cors_headers(req, res, ctx);
           return;
         }
       }
@@ -1157,7 +1160,7 @@ void register_debtor_routes(httplib::Server& server, AppContext& ctx, const std:
     if (!insert_debtor(ctx, d)) {
       res.status = 500;
       res.set_content("Failed to save debtor", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
@@ -1165,11 +1168,12 @@ void register_debtor_routes(httplib::Server& server, AppContext& ctx, const std:
     payload["resolved"] = person_guess_json(parsed);
     res.status = 201;
     res.set_content(payload.dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Update
   server.Put(base + R"(/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     const auto& id = req.matches[1];
     json body_json;
     const auto content_type = req.get_header_value("Content-Type");
@@ -1185,14 +1189,14 @@ void register_debtor_routes(httplib::Server& server, AppContext& ctx, const std:
     if (!fetch_debtors(ctx, debtors)) {
       res.status = 500;
       res.set_content("Failed to load debtors", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     auto it = std::find_if(debtors.begin(), debtors.end(), [&](const Debtor& d) { return d.id == id; });
     if (it == debtors.end()) {
       res.status = 404;
       res.set_content("Debtor not found", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
@@ -1217,24 +1221,25 @@ void register_debtor_routes(httplib::Server& server, AppContext& ctx, const std:
     if (!update_debtor(ctx, updated)) {
       res.status = 500;
       res.set_content("Failed to update debtor", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
     res.set_content(serialize_debtor(updated).dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Delete
   server.Delete(base + R"(/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     const auto& id = req.matches[1];
     if (!remove_debtor(ctx, id)) {
       res.status = 500;
       res.set_content("Failed to delete debtor", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     res.status = 204;
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 }

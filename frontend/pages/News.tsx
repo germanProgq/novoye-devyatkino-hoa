@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { NewsItem } from '../types';
+import { getStoredSessionUser, isAdmin as isAdminRole } from '../utils/auth';
 
 const defaultNewsImage = '/images/gerb250.jpg';
 const API_BASE_URL = (
@@ -93,7 +94,7 @@ const News: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const [isAdmin] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [adminActionError, setAdminActionError] = useState<string | null>(null);
   const [busyNewsId, setBusyNewsId] = useState<string | null>(null);
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
@@ -111,7 +112,7 @@ const News: React.FC = () => {
 
         for (const path of endpoints) {
           try {
-            const response = await fetch(`${API_BASE_URL}${path}`);
+            const response = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include' });
             if (!response.ok) {
               lastError = new Error(`API responded with ${response.status}`);
               continue;
@@ -138,6 +139,10 @@ const News: React.FC = () => {
     };
 
     loadNews();
+  }, []);
+
+  useEffect(() => {
+    setIsAdmin(isAdminRole(getStoredSessionUser()));
   }, []);
 
   useEffect(() => {
@@ -259,7 +264,7 @@ const News: React.FC = () => {
     setAdminActionError(null);
     setBusyNewsId(id);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/news/${id}`, { method: 'DELETE' });
+      const response = await fetch(`${API_BASE_URL}/api/news/${id}`, { method: 'DELETE', credentials: 'include' });
       if (!response.ok && response.status !== 204) {
         throw new Error('Failed to delete');
       }
@@ -344,11 +349,11 @@ const News: React.FC = () => {
                   style={isHighlighted ? { boxShadow: '0 10px 30px rgba(0,0,0,0.08)' } : undefined}
                 >
                   {isAdmin && (
-                    <div className="absolute top-3 right-3 z-10 flex gap-2">
+                    <div className="order-3 md:order-none flex flex-wrap items-center justify-between md:justify-end gap-3 md:gap-2 px-4 pb-4 md:px-0 md:pb-0 md:absolute md:top-3 md:right-3 md:z-10 w-full md:w-auto">
                       <button
                         type="button"
                         onClick={() => handleAdminEdit(item)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/90 border border-[color:var(--color-info-border)] text-[var(--color-ink-soft)] hover:text-primary hover:bg-white shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-white/95 border border-[color:var(--color-info-border)] text-[var(--color-ink-soft)] hover:text-primary hover:bg-white shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={busyNewsId === item.id}
                       >
                         <span className="material-symbols-outlined text-sm align-middle">edit</span>{' '}
@@ -357,7 +362,7 @@ const News: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleAdminDelete(item.id)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/90 border border-[color:var(--color-info-border)] text-accent hover:bg-accent/10 shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-white/95 border border-[color:var(--color-info-border)] text-accent hover:bg-accent/10 shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={busyNewsId === item.id}
                       >
                         <span className="material-symbols-outlined text-sm align-middle">delete</span>{' '}
@@ -365,7 +370,7 @@ const News: React.FC = () => {
                       </button>
                     </div>
                   )}
-                  <div className="md:w-1/3 w-full h-48 md:h-[220px] lg:h-[260px] relative overflow-hidden bg-[var(--color-info-surface)]">
+                  <div className="order-1 md:order-none md:w-1/3 w-full h-48 md:h-[220px] lg:h-[260px] relative overflow-hidden bg-[var(--color-info-surface)]">
                     <img
                       src={image}
                       alt={item.title}
@@ -378,7 +383,7 @@ const News: React.FC = () => {
                       </span>
                     </div>
                   </div>
-                  <div className="p-6 flex-1 flex flex-col">
+                  <div className="order-2 md:order-none p-6 flex-1 flex flex-col">
                     <div className="text-xs text-[var(--color-ink-soft)] mb-2">{date}</div>
                     <h2 className="text-xl font-bold text-[var(--color-ink)] mb-3">{item.title}</h2>
                     <p className="text-[var(--color-ink-soft)] text-sm leading-relaxed flex-1">

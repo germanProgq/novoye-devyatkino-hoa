@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const data = [
@@ -11,6 +11,34 @@ const data = [
 ];
 
 const Dashboard: React.FC = () => {
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [{ width, height }, setSize] = useState({ width: 0, height: 0 });
+
+  useLayoutEffect(() => {
+    const el = chartContainerRef.current;
+    if (!el) return undefined;
+
+    const updateChartReady = () => {
+      const rect = el.getBoundingClientRect();
+      setSize({
+        width: Math.max(220, Math.floor(rect.width)),
+        height: Math.max(220, Math.floor(rect.height)),
+      });
+    };
+
+    updateChartReady();
+
+    if (typeof ResizeObserver === 'undefined') {
+      const id = window.setTimeout(updateChartReady, 0);
+      return () => window.clearTimeout(id);
+    }
+
+    const resizeObserver = new ResizeObserver(updateChartReady);
+    resizeObserver.observe(el);
+
+    return () => resizeObserver.disconnect();
+  }, []);
+
   return (
     <div className="space-y-6">
       <header>
@@ -61,12 +89,13 @@ const Dashboard: React.FC = () => {
             <h3 className="font-semibold text-[var(--color-ink)]">Расходы за 6 месяцев</h3>
             <select className="text-sm border-[color:var(--color-info-border)] rounded-md text-[var(--color-ink)] bg-white focus:border-primary focus:ring-primary/30">
               <option>Все услуги</option>
-              <option>Вода</option>
-              <option>Свет</option>
-            </select>
-          </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={200}>
+            <option>Вода</option>
+            <option>Свет</option>
+          </select>
+        </div>
+        <div ref={chartContainerRef} className="h-64 w-full min-w-[220px] min-h-[220px]">
+          {width > 0 && height > 0 ? (
+            <ResponsiveContainer width={width} height={height}>
               <BarChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(175, 194, 215, 0.6)" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#3b4a3b', fontSize: 12}} dy={10} />
@@ -78,10 +107,15 @@ const Dashboard: React.FC = () => {
                 <Bar dataKey="amount" fill="var(--color-forest)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-[var(--color-ink-soft)]">
+              Загружаем график...
+            </div>
+          )}
         </div>
+      </div>
 
-        {/* Recent Activity */}
+      {/* Recent Activity */}
         <div className="bg-[var(--color-info-surface)] p-6 rounded-xl border border-[color:var(--color-info-border)] shadow-sm backdrop-blur-sm">
           <h3 className="font-semibold text-[var(--color-ink)] mb-4">Последние события</h3>
           <div className="space-y-4">
