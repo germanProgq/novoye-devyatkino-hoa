@@ -43,6 +43,7 @@ const Documents: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [isAdminUser, setIsAdminUser] = useState(false);
+  const [introPlayed, setIntroPlayed] = useState(false);
 
   useEffect(() => {
     setIsAdminUser(isAdmin(getStoredSessionUser()));
@@ -140,6 +141,17 @@ const Documents: React.FC = () => {
       return matchesSearch && matchesCategory;
     });
   }, [documents, searchTerm, selectedCategory]);
+
+  const shouldAnimateDocs = useMemo(
+    () => !introPlayed && !loading && !error && filteredDocs.length > 0,
+    [introPlayed, loading, error, filteredDocs.length],
+  );
+
+  useEffect(() => {
+    if (!shouldAnimateDocs) return undefined;
+    const timer = window.setTimeout(() => setIntroPlayed(true), 1400);
+    return () => window.clearTimeout(timer);
+  }, [shouldAnimateDocs]);
 
   const handleDownload = (doc: DocumentItem) => {
     if (doc.downloadUrl) {
@@ -434,8 +446,14 @@ const Documents: React.FC = () => {
             </div>
           )}
 
-          {!loading && !error && filteredDocs.map((doc) => (
-            <div key={doc.id} className="p-4 flex items-start md:items-center gap-4 hover:bg-white/70 transition-colors group">
+          {!loading && !error && filteredDocs.map((doc, index) => (
+            <div
+              key={doc.id}
+              className={`p-4 flex items-start md:items-center gap-4 hover:bg-white/70 transition-colors group doc-stagger ${
+                shouldAnimateDocs ? 'doc-stagger--intro' : ''
+              }`}
+              style={shouldAnimateDocs ? { ['--doc-delay' as string]: `${index * 70}ms` } : undefined}
+            >
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${renderIconClasses(doc.type)}`}>
                 <span className="material-symbols-outlined">
                   {renderIcon(doc.type)}

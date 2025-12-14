@@ -1,4 +1,4 @@
-import React, { CSSProperties, useEffect, useMemo, useState } from 'react';
+import React, { CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { SessionUser, isAdmin } from '../utils/auth';
 
@@ -24,8 +24,11 @@ const Sidebar: React.FC<{
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarReady, setSidebarReady] = useState(false);
+  const [pressedItem, setPressedItem] = useState<string | null>(null);
+  const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const name = useMemo(() => user.username || 'Неизвестный', [user.username]);
   const meta = useMemo(() => (isAdmin(user) ? 'Администратор' : 'Пользователь'), [user]);
+  const pressTimeout = useRef<number | null>(null);
 
   useEffect(() => {
     const shouldReveal = isOpen || window.innerWidth >= 1024;
@@ -36,6 +39,37 @@ const Sidebar: React.FC<{
     const id = requestAnimationFrame(() => setSidebarReady(true));
     return () => cancelAnimationFrame(id);
   }, [isOpen]);
+
+  useEffect(
+    () => () => {
+      if (pressTimeout.current) {
+        window.clearTimeout(pressTimeout.current);
+      }
+    },
+    [],
+  );
+
+  const handleNavPress = (
+    path: string,
+    event?: React.MouseEvent<HTMLAnchorElement> | React.TouchEvent<HTMLAnchorElement>,
+  ) => {
+    if (pressTimeout.current) {
+      window.clearTimeout(pressTimeout.current);
+    }
+    setPressedItem(path);
+    if (event) {
+      const target = event.currentTarget;
+      const rect = target.getBoundingClientRect();
+      const point = 'touches' in event ? event.touches[0] : event;
+      const x = ((point.clientX - rect.left) / rect.width) * 100;
+      const y = ((point.clientY - rect.top) / rect.height) * 100;
+      target.style.setProperty('--sidebar-ripple-x', `${x}%`);
+      target.style.setProperty('--sidebar-ripple-y', `${y}%`);
+    }
+    pressTimeout.current = window.setTimeout(() => {
+      setPressedItem((current) => (current === path ? null : current));
+    }, 420);
+  };
 
   const handleLogout = () => {
     onLogout();
@@ -50,6 +84,22 @@ const Sidebar: React.FC<{
     if (window.innerWidth < 1024) onClose();
     navigate('/login', { replace: true });
   };
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const handleOutsideClick = (event: MouseEvent | TouchEvent) => {
+      if (!menuContainerRef.current) return;
+      if (!menuContainerRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, [menuOpen]);
 
   const sidebarClasses = `
     fixed inset-y-0 left-0 z-50 w-64 bg-white/90 backdrop-blur border-r border-[color:var(--color-info-border)] transform transition-transform duration-300 ease-in-out
@@ -83,26 +133,32 @@ const Sidebar: React.FC<{
               <NavLink
                 key={item.path}
                 to={item.path}
-                onClick={() => { if(window.innerWidth < 1024) onClose(); }}
+                onClick={() => {
+                  if (window.innerWidth < 1024) onClose();
+                }}
+                onMouseDown={(event) => handleNavPress(item.path, event)}
+                onTouchStart={(event) => handleNavPress(item.path, event)}
                 style={{ '--sidebar-delay': `${index * 60}ms` } as CSSProperties}
                 className={({ isActive }) =>
-                  `sidebar-nav-animate flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                  `sidebar-nav-animate sidebar-nav-item ${
+                    pressedItem === item.path ? 'sidebar-nav-pressed' : ''
+                  } flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-primary/10 text-primary ring-1 ring-[color:var(--color-info-border)]'
                       : 'text-[var(--color-ink-soft)] hover:bg-[var(--color-info-surface)] hover:text-[var(--color-ink)]'
                   }`
                 }
               >
-                <span className={`material-symbols-outlined ${item.path === '/' ? '' : ''}`}>
+                <span className="material-symbols-outlined sidebar-nav-icon">
                   {item.icon}
                 </span>
-                {item.name}
+                <span className="sidebar-nav-label truncate">{item.name}</span>
               </NavLink>
             ))}
           </nav>
 
           <div className="mt-auto p-4 border-t border-[color:var(--color-info-border)]">
-            <div className="relative">
+            <div className="relative" ref={menuContainerRef}>
               <button
                 onClick={() => setMenuOpen((prev) => !prev)}
                 className="flex items-center gap-3 w-full px-4 py-2 text-left rounded-xl hover:bg-[var(--color-info-surface)] transition sidebar-nav-animate"

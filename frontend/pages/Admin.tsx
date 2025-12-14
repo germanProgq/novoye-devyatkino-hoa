@@ -819,6 +819,24 @@ const Admin: React.FC = () => {
     );
   };
 
+  const triggerTabFeedback = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) => {
+      const target = event.currentTarget;
+      const rect = target.getBoundingClientRect();
+      const point = 'touches' in event ? event.touches[0] : event;
+      const x = ((point.clientX - rect.left) / rect.width) * 100;
+      const y = ((point.clientY - rect.top) / rect.height) * 100;
+      target.style.setProperty('--tab-ripple-x', `${x}%`);
+      target.style.setProperty('--tab-ripple-y', `${y}%`);
+      target.classList.remove('soft-tab--pressed');
+      window.requestAnimationFrame(() => {
+        target.classList.add('soft-tab--pressed');
+        window.setTimeout(() => target.classList.remove('soft-tab--pressed'), 420);
+      });
+    },
+    [],
+  );
+
   const updateAdminRequestStatus = async (id: string, status: RequestStatus) => {
     setRequestActionError(null);
     setRequestMutations((prev) => ({ ...prev, [id]: true }));
@@ -1827,7 +1845,7 @@ const Admin: React.FC = () => {
             Управляйте новостями, задолженностями и документами.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 md:justify-end md:ml-auto">
+        <div className="hidden md:flex flex-wrap gap-2 md:justify-end md:ml-auto">
           <span className="px-3 py-2 rounded-lg bg-white border border-[color:var(--color-info-border)] text-sm text-[var(--color-ink-soft)] flex items-center gap-2">
             <span className="material-symbols-outlined text-primary">verified</span>
             Данные синхронизированы
@@ -1839,20 +1857,22 @@ const Admin: React.FC = () => {
         </div>
       </header>
 
-      <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-2">
+      <div className="flex gap-2 pb-2 overflow-x-auto hide-scrollbar pr-1">
         {ADMIN_TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
+            onMouseDown={triggerTabFeedback}
+            onTouchStart={triggerTabFeedback}
             onClick={() => setTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap ${
+            className={`soft-tab flex items-center justify-center gap-1.5 px-3 md:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap flex-none min-w-[120px] sm:min-w-[140px] ${
               activeTab === tab.id
-                ? 'bg-primary text-white shadow-sm'
+                ? 'soft-tab--active bg-primary text-white shadow-sm'
                 : 'bg-white border border-[color:var(--color-info-border)] text-[var(--color-ink-soft)] hover:bg-[var(--color-info-surface)] hover:text-[var(--color-ink)]'
             }`}
           >
-            <span className="material-symbols-outlined text-base">{tab.icon}</span>
-            {tab.label}
+            <span className="material-symbols-outlined text-base soft-tab__icon">{tab.icon}</span>
+            <span className="soft-tab__label">{tab.label}</span>
           </button>
         ))}
       </div>
@@ -2057,7 +2077,7 @@ const Admin: React.FC = () => {
               {accountUsers.length === 0 && <option value="">Нет пользователей</option>}
               {accountUsers.map((user) => (
                 <option key={user.username} value={user.username}>
-                  {user.username} {user.role === 'admin' ? '(админ)' : ''}
+                  {user.username} {user.role === 'admin' ? '(Администратор)' : ''}
                 </option>
               ))}
             </select>
@@ -2640,17 +2660,21 @@ const Admin: React.FC = () => {
                   return (
                     <button
                       key={tab.key}
+                      onMouseDown={triggerTabFeedback}
+                      onTouchStart={triggerTabFeedback}
                       onClick={() => setAdminRequestFilter(tab.key)}
-                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
+                      className={`soft-tab inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
                         isActive
-                          ? 'bg-primary text-white border-primary shadow-sm'
+                          ? 'soft-tab--active bg-primary text-white border-primary shadow-sm'
                           : 'bg-white text-[var(--color-ink)] border-[color:var(--color-info-border)] hover:bg-[var(--color-info-surface)]'
                       }`}
                     >
-                      {tab.label}
+                      <span className="soft-tab__label">{tab.label}</span>
                       <span
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${
-                          isActive ? 'bg-white/20 text-white' : 'bg-[var(--color-info-surface)] text-[var(--color-ink-soft)]'
+                        className={`soft-tab__count w-6 h-6 rounded-full flex items-center justify-center text-xs ${
+                          isActive
+                            ? 'bg-white/20 text-white'
+                            : 'bg-[var(--color-info-surface)] text-[var(--color-ink-soft)]'
                         }`}
                       >
                         {tab.count}

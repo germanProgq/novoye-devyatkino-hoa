@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { NewsItem } from '../types';
 import { getStoredSessionUser, isAdmin as isAdminRole } from '../utils/auth';
@@ -100,6 +100,8 @@ const News: React.FC = () => {
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [skipNextFilterReset, setSkipNextFilterReset] = useState(false);
+  const [introAnimated, setIntroAnimated] = useState(false);
+  const pageChangeInitialized = useRef(false);
 
   useEffect(() => {
     const loadNews = async () => {
@@ -143,6 +145,12 @@ const News: React.FC = () => {
 
   useEffect(() => {
     setIsAdmin(isAdminRole(getStoredSessionUser()));
+  }, []);
+
+  useEffect(() => {
+    // Reset intro flag on fresh mounts (including full reloads)
+    setIntroAnimated(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   useEffect(() => {
@@ -222,6 +230,7 @@ const News: React.FC = () => {
   const pageLabel = totalPages > 0 ? `${page + 1}/${totalPages}` : '—';
   const canPrev = page > 0;
   const canNext = page + 1 < totalPages;
+  const shouldPlayIntro = !introAnimated && !loading && !error && filteredNews.length > 0;
 
   useEffect(() => {
     if (!pendingScrollId || loading) return;
@@ -245,6 +254,21 @@ const News: React.FC = () => {
     const timer = window.setTimeout(() => setHighlightId(null), 3200);
     return () => window.clearTimeout(timer);
   }, [highlightId]);
+
+  useEffect(() => {
+    if (!shouldPlayIntro) return undefined;
+    const timer = window.setTimeout(() => setIntroAnimated(true), 1400);
+    return () => window.clearTimeout(timer);
+  }, [shouldPlayIntro]);
+
+  useEffect(() => {
+    if (!pageChangeInitialized.current) {
+      pageChangeInitialized.current = true;
+      return;
+    }
+    if (pendingScrollId) return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [page, pendingScrollId]);
 
   const handleAdminEdit = (item: NewsItem) => {
     setAdminActionError(null);
@@ -332,7 +356,7 @@ const News: React.FC = () => {
               </div>
             )}
 
-            {!loading && !error && paginatedNews.map((item) => {
+            {!loading && !error && paginatedNews.map((item, index) => {
               const image = item.image || item.imageUrl || defaultNewsImage;
               const tagTone = getTagTone(item.tag);
               const date = item.date || formatNewsDate(item.createdAt) || '—';
@@ -342,12 +366,17 @@ const News: React.FC = () => {
                 <article
                   key={item.id}
                   id={cardId}
-                  className={`group relative bg-[var(--color-info-surface)] rounded-2xl border border-[color:var(--color-info-border)] shadow-sm overflow-hidden flex flex-col md:flex-row hover:shadow-md transition-all duration-400 ease-out backdrop-blur-sm ${
+                  className={`group relative bg-[var(--color-info-surface)] rounded-2xl border border-[color:var(--color-info-border)] shadow-sm overflow-hidden flex flex-col md:flex-row hover:shadow-md transition-all duration-400 ease-out backdrop-blur-sm news-stagger ${
+                    shouldPlayIntro ? 'news-stagger--intro' : ''
+                  } ${
                     isHighlighted ? 'ring-2 ring-primary/60 ring-offset-1 ring-offset-[var(--color-info-surface)]' : ''
                   }`}
                   aria-live={isHighlighted ? 'polite' : undefined}
                   aria-label={item.title}
-                  style={isHighlighted ? { boxShadow: '0 10px 30px rgba(0,0,0,0.08)' } : undefined}
+                  style={{
+                    ...(isHighlighted ? { boxShadow: '0 10px 30px rgba(0,0,0,0.08)' } : {}),
+                    ...(shouldPlayIntro ? { ['--news-delay' as string]: `${index * 80}ms` } : {}),
+                  }}
                 >
                   {isAdmin && (
                     <div className="order-3 md:order-none flex flex-wrap items-center justify-between md:justify-end gap-3 md:gap-2 px-4 pb-4 md:px-0 md:pb-0 md:absolute md:top-3 md:right-3 md:z-10 w-full md:w-auto">

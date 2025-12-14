@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FaqItem } from '../types';
 
 const faqData: FaqItem[] = [
@@ -27,6 +27,7 @@ const faqData: FaqItem[] = [
 const FAQ: React.FC = () => {
   const [openQuestion, setOpenQuestion] = useState<string | null>(faqData[0]?.question ?? null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [faqIntroDone, setFaqIntroDone] = useState(false);
 
   const filteredFaqs = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -46,6 +47,14 @@ const FAQ: React.FC = () => {
     setOpenQuestion(null);
   };
 
+  const shouldAnimateFaq = !faqIntroDone && filteredFaqs.length > 0;
+
+  useEffect(() => {
+    if (!shouldAnimateFaq) return undefined;
+    const timer = window.setTimeout(() => setFaqIntroDone(true), 1200);
+    return () => window.clearTimeout(timer);
+  }, [shouldAnimateFaq]);
+
   return (
     <div className="space-y-8">
       <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-primary to-accent py-16 px-8 text-center text-white">
@@ -57,7 +66,7 @@ const FAQ: React.FC = () => {
           <div className="relative">
             <input 
               type="text" 
-              placeholder="Поиск по вопросам (например: парковка, оплата)..." 
+              placeholder="Поиск по вопросам..." 
               className="w-full py-4 pl-12 pr-4 rounded-xl text-[var(--color-ink)] focus:outline-none focus:ring-4 focus:ring-white/40 shadow-lg border border-white/40 placeholder:text-[var(--color-ink-soft)]"
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
@@ -79,7 +88,10 @@ const FAQ: React.FC = () => {
           return (
             <div
               key={`${item.category}-${item.question}`}
-              className="border border-[color:var(--color-info-border)] rounded-xl bg-[var(--color-info-surface)] overflow-hidden backdrop-blur-sm"
+              className={`faq-card border border-[color:var(--color-info-border)] rounded-xl bg-[var(--color-info-surface)] overflow-hidden backdrop-blur-sm ${
+                shouldAnimateFaq ? 'faq-card--intro' : ''
+              }`}
+              style={shouldAnimateFaq ? { ['--faq-delay' as string]: `${index * 70}ms` } : undefined}
             >
               <button 
                 className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-white/70 transition-colors"
