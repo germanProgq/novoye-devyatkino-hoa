@@ -10,6 +10,7 @@ import {
   DebtorItem,
   DocumentItem,
   NewsItem,
+  MeterRecord,
 } from '../types';
 
 type Building = {
@@ -212,6 +213,18 @@ const formatDateWithShortMonth = (raw?: string) => {
   return `${day} ${monthName} ${year}`;
 };
 
+const formatDateTimeCompact = (raw?: string) => {
+  if (!raw) return '';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
 const baseCashflow = [
   { month: 'Июль', collected: 512000, debt: 82000 },
   { month: 'Август', collected: 498000, debt: 76000 },
@@ -335,13 +348,14 @@ type NewsReturnState = {
   returnHash?: string;
 };
 
-type AdminTab = 'overview' | 'accounts' | 'payments' | 'debtors' | 'news' | 'documents';
+type AdminTab = 'overview' | 'accounts' | 'payments' | 'debtors' | 'meters' | 'news' | 'documents';
 
 const ADMIN_TABS: { id: AdminTab; label: string; icon: string }[] = [
   { id: 'overview', label: 'Обзор', icon: 'dashboard' },
   { id: 'accounts', label: 'Аккаунты', icon: 'link' },
   { id: 'payments', label: 'Взносы', icon: 'payments' },
   { id: 'debtors', label: 'Должники', icon: 'warning' },
+  { id: 'meters', label: 'Показания', icon: 'water' },
   { id: 'news', label: 'Новости', icon: 'campaign' },
   { id: 'documents', label: 'Документы', icon: 'folder_open' },
 ];
@@ -358,6 +372,10 @@ const Admin: React.FC = () => {
     normalizeAdminTab(new URLSearchParams(location.search).get('tab'))
   );
   const [debtors, setDebtors] = useState<DebtorItem[]>([]);
+  const [meterReadings, setMeterReadings] = useState<MeterRecord[]>([]);
+  const [meterLoading, setMeterLoading] = useState(false);
+  const [meterError, setMeterError] = useState<string | null>(null);
+  const [meterUserFilter, setMeterUserFilter] = useState('');
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [newsPage, setNewsPage] = useState(0);
   const [newsTotalCount, setNewsTotalCount] = useState(0);
@@ -535,6 +553,15 @@ const Admin: React.FC = () => {
     updatedAt: item.updatedAt || item.updated_at || '',
   });
 
+  const mapApiMeter = (item: any): MeterRecord => ({
+    id: item.id ?? '',
+    username: item.username || '',
+    hotWater: typeof item.hotWater === 'number' ? item.hotWater : Number(item.hotWater) || 0,
+    coldWater: typeof item.coldWater === 'number' ? item.coldWater : Number(item.coldWater) || 0,
+    electricity: typeof item.electricity === 'number' ? item.electricity : Number(item.electricity) || 0,
+    createdAt: item.createdAt || item.created_at || '',
+  });
+
   const mapApiAccountUser = (item: any): AccountUser => ({
     username: item.username || '',
     role: typeof item.role === 'string' ? item.role : '',
@@ -582,6 +609,26 @@ const Admin: React.FC = () => {
       console.error(err);
     }
   };
+
+  const loadMeters = useCallback(async () => {
+    setMeterLoading(true);
+    setMeterError(null);
+    try {
+      const query = meterUserFilter ? `?username=${encodeURIComponent(meterUserFilter)}` : '';
+      const response = await apiFetch(`${API_BASE_URL}/api/meters${query}`);
+      if (!response.ok) {
+        throw new Error(`API responded with ${response.status}`);
+      }
+      const payload = await response.json();
+      const list = Array.isArray(payload.readings) ? payload.readings : Array.isArray(payload) ? payload : [];
+      setMeterReadings(list.map(mapApiMeter));
+    } catch (err) {
+      console.error(err);
+      setMeterError('Не удалось загрузить показания');
+    } finally {
+      setMeterLoading(false);
+    }
+  }, [meterUserFilter]);
 
   const loadAccountUsers = useCallback(async () => {
     try {
@@ -842,6 +889,10 @@ const Admin: React.FC = () => {
     };
     loadDebtors();
   }, []);
+
+  useEffect(() => {
+    loadMeters();
+  }, [loadMeters]);
 
   useEffect(() => {
     loadAccountUsers();
@@ -2253,6 +2304,94 @@ const Admin: React.FC = () => {
         </div>
       </div>
 
+      )}
+
+      {activeTab === 'meters' && (
+      <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-6 backdrop-blur-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-semibold text-[var(--color-ink)]">Показания счетчиков</h3>
+            <p className="text-sm text-[var(--color-ink-soft)]">Отправленные жильцами значения по аккаунтам.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-[var(--color-ink-soft)] flex items-center gap-2">
+              <span className="hidden sm:inline">Фильтр:</span>
+              <select
+                value={meterUserFilter}
+                onChange={(e) => setMeterUserFilter(e.target.value)}
+                className="text-sm border border-[color:var(--color-info-border)] rounded-md text-[var(--color-ink)] bg-white focus:border-primary focus:ring-primary/30 px-2 py-1"
+              >
+                <option value="">Все пользователи</option>
+                {accountUsers.map((user) => (
+                  <option key={user.username} value={user.username}>
+                    {user.username}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={loadMeters}
+              disabled={meterLoading}
+              className="px-3 py-2 rounded-lg text-sm font-semibold border border-[color:var(--color-info-border)] bg-white hover:bg-[var(--color-info-surface)] transition-colors flex items-center gap-2 disabled:opacity-60"
+            >
+              <span className="material-symbols-outlined text-base">refresh</span>
+              {meterLoading ? 'Обновляем...' : 'Обновить'}
+            </button>
+          </div>
+        </div>
+
+        {meterError && (
+          <div className="mb-3 text-sm text-accent bg-accent/10 border border-accent/30 rounded-lg px-3 py-2">
+            {meterError}
+          </div>
+        )}
+
+        <div className="overflow-x-auto rounded-lg border border-[color:var(--color-info-border)] bg-white">
+          <table className="w-full text-sm">
+            <thead className="text-xs uppercase text-[var(--color-ink-soft)] bg-[var(--color-info-surface)]">
+              <tr>
+                <th className="px-4 py-2 text-left">Аккаунт</th>
+                <th className="px-4 py-2 text-left">Горячая, м³</th>
+                <th className="px-4 py-2 text-left">Холодная, м³</th>
+                <th className="px-4 py-2 text-left">Электричество, кВт⋅ч</th>
+                <th className="px-4 py-2 text-left">Когда</th>
+              </tr>
+            </thead>
+            <tbody>
+              {meterLoading && meterReadings.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-3 text-[var(--color-ink-soft)] text-center">
+                    Загружаем показания...
+                  </td>
+                </tr>
+              )}
+              {!meterLoading && meterReadings.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-3 text-[var(--color-ink-soft)] text-center">
+                    Пока нет отправленных показаний.
+                  </td>
+                </tr>
+              )}
+              {meterReadings.map((row) => (
+                <tr key={row.id} className="border-t border-[color:var(--color-info-border)] hover:bg-[var(--color-info-surface)]/60">
+                  <td className="px-4 py-2 font-semibold text-[var(--color-ink)]">{row.username || '—'}</td>
+                  <td className="px-4 py-2 text-[var(--color-ink-soft)]">
+                    {Math.max(0, row.hotWater).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-4 py-2 text-[var(--color-ink-soft)]">
+                    {Math.max(0, row.coldWater).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-4 py-2 text-[var(--color-ink-soft)]">
+                    {Math.max(0, row.electricity).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-4 py-2 text-[var(--color-ink-soft)]">{formatDateTimeCompact(row.createdAt) || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
       )}
 
       {activeTab === 'news' && (

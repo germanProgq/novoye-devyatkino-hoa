@@ -77,6 +77,15 @@ export interface MeterReading {
   status: 'Принято' | 'Обработка';
 }
 
+export interface MeterRecord {
+  id: string;
+  username: string;
+  hotWater: number;
+  coldWater: number;
+  electricity: number;
+  createdAt?: string;
+}
+
 export interface FaqItem {
   question: string;
   answer: string;
