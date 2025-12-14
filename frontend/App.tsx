@@ -12,6 +12,7 @@ import Requests from './pages/Requests';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import { SessionUser, clearSession, fetchCurrentUser, getStoredSessionUser, isAdmin } from './utils/auth';
+import ThemeToggle from './components/ThemeToggle';
 import {
   AboutBoardPage,
   AboutGalleryPage,
@@ -178,7 +179,7 @@ const AppLayout: React.FC<{
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile Header */}
-        <header className="bg-white/95 backdrop-blur border-b border-[color:var(--color-info-border)] h-16 flex items-center px-4 justify-between lg:hidden shrink-0 z-20">
+        <header className="bg-[var(--color-surface)] border-b border-[color:var(--color-info-border)] h-16 flex items-center px-4 justify-between lg:hidden shrink-0 z-20 shadow-sm">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setSidebarOpen(true)}

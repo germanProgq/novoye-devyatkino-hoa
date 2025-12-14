@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, NavLink } from 'react-router-dom';
+import ThemeToggle from '../ThemeToggle';
 
 const NAV_LINKS = [
   { label: 'О ТСЖ', to: '/o-tszh' },
@@ -29,9 +30,10 @@ const PublicTopbar: React.FC = () => {
           </Link>
 
           <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle variant="icon" />
             <Link
               to="/dashboard"
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-primary text-white text-sm font-semibold shadow-sm hover:-translate-y-0.5 transition"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-primary text-primary-contrast text-sm font-semibold shadow-sm hover:-translate-y-0.5 transition"
             >
               <span className="material-symbols-outlined text-base">login</span>
               Личный кабинет
@@ -48,7 +50,7 @@ const PublicTopbar: React.FC = () => {
               className={({ isActive }) =>
                 `px-3 md:px-4 py-2 rounded-xl text-sm font-semibold transition whitespace-nowrap ${
                   isActive
-                    ? 'bg-primary text-white shadow-sm'
+                    ? 'bg-primary text-primary-contrast shadow-sm'
                     : 'bg-white/70 border border-[color:var(--color-info-border)] text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] hover:bg-[var(--color-info-surface)]'
                 }`
               }

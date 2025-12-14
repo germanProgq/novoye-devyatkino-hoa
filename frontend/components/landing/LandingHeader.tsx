@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import ThemeToggle from '../ThemeToggle';
 
 type NavChild = { label: string; href: string; target?: '_blank' | '_self' | '_parent' | '_top' };
 
@@ -125,6 +126,11 @@ const LandingHeader: React.FC = () => {
   }, [mobileOpen]);
 
   const headerStyle = useMemo(() => {
+    const glassSurface = 'rgba(var(--color-surface-rgb), 0.97)';
+    const border = 'var(--color-info-border)';
+    const shadowStrong = '0 16px 38px -26px rgba(0, 0, 0, 0.45)';
+    const shadowMobile = '0 14px 30px -24px rgba(0, 0, 0, 0.45)';
+
     // Mobile: fully transparent over hero, solid after
     if (isMobile) {
       if (!pastHero) {
@@ -135,18 +141,19 @@ const LandingHeader: React.FC = () => {
         } as React.CSSProperties;
       }
       return {
-        backgroundColor: 'rgba(246, 241, 229, 0.98)',
-        borderColor: 'rgba(175, 194, 215, 0.6)',
-        boxShadow: '0 14px 30px -24px rgba(35, 51, 35, 0.7)',
+        backgroundColor: glassSurface,
+        borderColor: border,
+        boxShadow: shadowMobile,
+        backdropFilter: 'blur(10px)',
       } as React.CSSProperties;
     }
 
     // Desktop/tablet
     if (pastHero) {
       return {
-        backgroundColor: 'rgba(246, 241, 229, 0.98)',
-        borderColor: 'rgba(175, 194, 215, 0.6)',
-        boxShadow: '0 16px 38px -26px rgba(35, 51, 35, 0.7)',
+        backgroundColor: glassSurface,
+        borderColor: border,
+        boxShadow: shadowStrong,
         backdropFilter: 'blur(10px)',
       } as React.CSSProperties;
     }
@@ -167,8 +174,9 @@ const LandingHeader: React.FC = () => {
     : 'hover:bg-white/10 hover:border-white/20 text-white';
   const labelTone = brandSolid ? 'text-[var(--color-ink-soft)]' : 'text-white/70';
   const navBase = 'px-3 py-2 rounded-lg border text-sm font-semibold transition duration-200 flex items-center gap-1';
-  const navActive = 'bg-accent text-white shadow-sm border-transparent';
+  const navActive = 'bg-accent text-primary-contrast shadow-sm border-transparent';
   const navNeutral = navLinkTone;
+  const toggleTone = pastHero || isMobile ? 'default' : 'inverted';
   const toggleMobileDropdown = (id: string) => {
     setMobileDropdowns((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -306,16 +314,18 @@ const LandingHeader: React.FC = () => {
             <span className="material-symbols-outlined text-base">call</span>
             Контакты
           </a>
+          <ThemeToggle variant="icon" tone={toggleTone} />
           <Link
             to="/dashboard"
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition duration-200 ${
               pastHero
-                ? 'bg-primary text-white shadow-sm hover:-translate-y-0.5 hover:shadow-md'
+                ? 'bg-primary text-primary-contrast shadow-sm hover:-translate-y-0.5 hover:shadow-md'
                 : 'border border-white/60 text-white hover:bg-white/10'
             }`}
+            aria-label="Войти"
           >
             <span className="material-symbols-outlined text-base">login</span>
-            Войти
+            <span className="hidden sm:inline">Войти</span>
           </Link>
           <button
             type="button"
@@ -444,10 +454,15 @@ const LandingHeader: React.FC = () => {
             </a>
             <Link
               to="/dashboard"
-              className="px-3 py-3 rounded-xl text-sm font-semibold text-white bg-primary text-center hover:-translate-y-0.5 transition"
+              className="px-3 py-3 rounded-xl text-sm font-semibold text-primary-contrast bg-primary text-center hover:-translate-y-0.5 transition inline-flex items-center justify-center gap-2"
+              aria-label="Войти"
             >
-              Войти
+              <span className="material-symbols-outlined text-base">login</span>
+              <span className="hidden sm:inline">Войти</span>
             </Link>
+          </div>
+          <div className="pt-2">
+            <ThemeToggle variant="chip" tone={toggleTone} className="w-full justify-center" />
           </div>
         </div>
       </div>

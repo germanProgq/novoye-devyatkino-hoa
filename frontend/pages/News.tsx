@@ -322,7 +322,7 @@ const News: React.FC = () => {
                 onClick={() => setFilter(tag)}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                   filter === tag
-                    ? 'bg-primary text-white shadow-sm'
+                    ? 'bg-primary text-primary-contrast shadow-sm'
                     : 'bg-white border border-[color:var(--color-info-border)] text-[var(--color-ink-soft)] hover:bg-[var(--color-info-surface)]'
                 }`}
               >

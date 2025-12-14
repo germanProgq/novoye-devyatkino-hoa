@@ -202,7 +202,7 @@ const Requests: React.FC = () => {
               onClick={() => setViewMode(mode as typeof viewMode)}
               className={`soft-tab inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
                 isActive
-                  ? 'soft-tab--active bg-primary text-white border-primary shadow-sm'
+                  ? 'soft-tab--active bg-primary text-primary-contrast border-primary shadow-sm'
                   : 'bg-white text-[var(--color-ink)] border-[color:var(--color-info-border)] hover:bg-[var(--color-info-surface)]'
               }`}
             >
@@ -292,7 +292,7 @@ const Requests: React.FC = () => {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center gap-2 bg-primary text-white font-semibold px-4 py-2 rounded-lg shadow-sm hover:bg-accent transition-colors disabled:opacity-70"
+              className="inline-flex items-center gap-2 bg-primary text-primary-contrast font-semibold px-4 py-2 rounded-lg shadow-sm hover:bg-accent transition-colors disabled:opacity-70"
             >
               <span className="material-symbols-outlined text-base">send</span>
               {submitting ? 'Отправляем...' : 'Отправить заявку'}
@@ -317,7 +317,7 @@ const Requests: React.FC = () => {
                     onClick={() => setActiveTab(tab.key)}
                     className={`soft-tab inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
                       isActive
-                        ? 'soft-tab--active bg-primary text-white border-primary shadow-sm'
+                        ? 'soft-tab--active bg-primary text-primary-contrast border-primary shadow-sm'
                         : 'bg-white text-[var(--color-ink)] border-[color:var(--color-info-border)] hover:bg-[var(--color-info-surface)]'
                     }`}
                   >
