@@ -28,6 +28,12 @@ services:
       HOA_DB_NAME: hoa
       HOA_DB_USER: hoa
       HOA_DB_PASSWORD: hoa_pass
+      HOA_JWT_SECRET: "change-me-in-prod"
+      HOA_ADMIN_USERNAME: admin
+      HOA_ADMIN_PASSWORD: admin
+      HOA_USER_USERNAME: user
+      HOA_USER_PASSWORD: user
+      HOA_CORS_ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:5173,http://localhost:4173,http://localhost:8080"
     ports:
       - "8080:8080"
     develop:

@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { DocumentItem } from '../types';
+import { getStoredSessionUser, isAdmin } from '../utils/auth';
 
 const API_BASE_URL = (
   import.meta.env.VITE_BACKEND_URL
@@ -41,6 +42,11 @@ const Documents: React.FC = () => {
   const [searchOpen, setSearchOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+
+  useEffect(() => {
+    setIsAdminUser(isAdmin(getStoredSessionUser()));
+  }, []);
 
   useEffect(() => {
     const fetchDocuments = async () => {
@@ -53,7 +59,7 @@ const Documents: React.FC = () => {
 
         for (const path of endpoints) {
           try {
-            const response = await fetch(`${API_BASE_URL}${path}`);
+            const response = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include' });
             if (!response.ok) {
               lastError = new Error(`API responded with ${response.status}`);
               continue;
@@ -143,6 +149,10 @@ const Documents: React.FC = () => {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdminUser) {
+      setUploadError('Недостаточно прав для загрузки документов');
+      return;
+    }
     if (!newFile) {
       setUploadError('Выберите файл');
       return;
@@ -163,6 +173,7 @@ const Documents: React.FC = () => {
       const response = await fetch(`${API_BASE_URL}/api/documents`, {
         method: 'POST',
         body: formData,
+        credentials: 'include',
       });
       if (!response.ok) {
         throw new Error(`API responded with ${response.status}`);
@@ -219,17 +230,19 @@ const Documents: React.FC = () => {
           <h1 className="text-2xl font-bold text-[var(--color-ink)]">Документы</h1>
           <p className="text-[var(--color-ink-soft)]">Архив официальных документов ТСЖ.</p>
         </div>
-        <button
-          onClick={() => setUploadOpen((v) => !v)}
-          className="bg-primary hover:bg-accent text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
-        >
-          <span className="material-symbols-outlined">upload</span>
-          {uploadOpen ? 'Скрыть форму' : 'Загрузить документ'}
-        </button>
+        {isAdminUser && (
+          <button
+            onClick={() => setUploadOpen((v) => !v)}
+            className="bg-primary hover:bg-accent text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+          >
+            <span className="material-symbols-outlined">upload</span>
+            {uploadOpen ? 'Скрыть форму' : 'Загрузить документ'}
+          </button>
+        )}
       </div>
 
       <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm overflow-hidden backdrop-blur-sm">
-        {uploadOpen && (
+        {isAdminUser && uploadOpen && (
           <div className="p-4 border-b border-[color:var(--color-info-border)] bg-white/70 space-y-3">
             <h3 className="font-semibold text-[var(--color-ink)]">Новая загрузка</h3>
             <form onSubmit={handleUpload} className="grid grid-cols-1 md:grid-cols-2 gap-3">

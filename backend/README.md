@@ -46,6 +46,10 @@ Environment overrides (defaults shown) for backend container:
 - `HOA_DB_NAME=hoa`
 - `HOA_DB_USER=hoa`
 - `HOA_DB_PASSWORD=hoa_pass`
+- `HOA_JWT_SECRET=change-me-in-prod`
+- `HOA_ADMIN_USERNAME=admin` / `HOA_ADMIN_PASSWORD=admin`
+- `HOA_USER_USERNAME=user` / `HOA_USER_PASSWORD=user`
+- `HOA_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:4173,http://localhost:8080`
 
 ## API
 
@@ -53,5 +57,6 @@ Environment overrides (defaults shown) for backend container:
 - `GET /api/documents/:id/download` – binary download of the requested document with the original filename.
 - `GET /api/contributions` – список взносов жильцов (POST для добавления), `.../parse` для подсказок по ФИО/квартире, `.../summary` для графиков.
 - `GET /api/debtors` – список должников (POST/PUT/DELETE для управления записями).
+- `POST /auth/login` / `/auth/refresh` / `/auth/logout` / `/auth/me` – JWT-based session endpoints (access/refresh tokens are stored in httpOnly cookies).
 
 CORS is open for GET/OPTIONS to simplify local frontend development.

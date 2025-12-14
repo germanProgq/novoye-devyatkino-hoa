@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { MeterReading } from '../types';
 
@@ -12,17 +12,46 @@ const historyData: MeterReading[] = [
 ];
 
 const MeterReadings: React.FC = () => {
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [{ width, height }, setSize] = useState({ width: 0, height: 0 });
   const [form, setForm] = useState({
     hotWater: '',
     coldWater: '',
     electricity: '',
   });
 
+  useLayoutEffect(() => {
+    const el = chartContainerRef.current;
+    if (!el) return undefined;
+
+    const updateSize = () => {
+      const rect = el.getBoundingClientRect();
+      setSize({
+        width: Math.max(1, Math.floor(rect.width)),
+        height: Math.max(1, Math.floor(rect.height)),
+      });
+    };
+
+    updateSize();
+
+    if (typeof ResizeObserver === 'undefined') {
+      const id = window.setTimeout(updateSize, 0);
+      return () => window.clearTimeout(id);
+    }
+
+    const resizeObserver = new ResizeObserver(updateSize);
+    resizeObserver.observe(el);
+
+    return () => resizeObserver.disconnect();
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     alert('Показания успешно отправлены!');
     setForm({ hotWater: '', coldWater: '', electricity: '' });
   };
+
+  const hasChartSpace = width > 0 && height > 0;
 
   return (
     <div className="space-y-6">
@@ -95,28 +124,42 @@ const MeterReadings: React.FC = () => {
         </div>
 
         {/* Chart */}
-        <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-6 lg:col-span-2 backdrop-blur-sm">
+        <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-4 sm:p-6 lg:col-span-2 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold text-[var(--color-ink)]">Динамика потребления (Электричество)</h3>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={200}>
-              <AreaChart data={historyData}>
-                <defs>
-                  <linearGradient id="colorElec" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-forest)" stopOpacity={0.16}/>
-                    <stop offset="95%" stopColor="var(--color-forest)" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#3b4a3b', fontSize: 12}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#3b4a3b', fontSize: 12}} />
-                <CartesianGrid vertical={false} stroke="rgba(175, 194, 215, 0.6)" strokeDasharray="3 3"/>
-                <Tooltip 
-                   contentStyle={{ borderRadius: '10px', border: '1px solid rgba(175, 194, 215, 0.45)', boxShadow: '0 10px 30px rgba(47, 58, 42, 0.12)' }}
-                />
-                <Area type="monotone" dataKey="electricity" stroke="var(--color-forest)" strokeWidth={2} fillOpacity={1} fill="url(#colorElec)" />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="-mx-5 sm:-mx-8">
+            <div ref={chartContainerRef} className="h-64 sm:h-72 w-full min-w-0">
+              {hasChartSpace ? (
+                <ResponsiveContainer width={width} height={height}>
+                  <AreaChart data={historyData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorElec" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--color-forest)" stopOpacity={0.16}/>
+                        <stop offset="95%" stopColor="var(--color-forest)" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis
+                      dataKey="month"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{fill: '#3b4a3b', fontSize: 12}}
+                      padding={{ left: 0, right: 0 }}
+                    />
+                    <YAxis width={32} tickMargin={6} axisLine={false} tickLine={false} tick={{fill: '#3b4a3b', fontSize: 12}} />
+                    <CartesianGrid vertical={false} stroke="rgba(175, 194, 215, 0.6)" strokeDasharray="3 3"/>
+                    <Tooltip 
+                       contentStyle={{ borderRadius: '10px', border: '1px solid rgba(175, 194, 215, 0.45)', boxShadow: '0 10px 30px rgba(47, 58, 42, 0.12)' }}
+                    />
+                    <Area type="monotone" dataKey="electricity" stroke="var(--color-forest)" strokeWidth={2} fillOpacity={1} fill="url(#colorElec)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-[var(--color-ink-soft)]">
+                  Загружаем график...
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

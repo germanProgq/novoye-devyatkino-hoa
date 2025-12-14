@@ -8,6 +8,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_executable(hoa_backend
   src/main.cpp
   src/db.cpp
+  src/auth.cpp
   src/documents.cpp
   src/news.cpp
   src/contributions.cpp
@@ -16,5 +17,6 @@ target_include_directories(hoa_backend PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/inclu
 
 find_package(Threads REQUIRED)
 find_package(PostgreSQL REQUIRED)
+find_package(OpenSSL REQUIRED)
 
-target_link_libraries(hoa_backend PRIVATE Threads::Threads PostgreSQL::PostgreSQL)
+target_link_libraries(hoa_backend PRIVATE Threads::Threads PostgreSQL::PostgreSQL OpenSSL::Crypto)

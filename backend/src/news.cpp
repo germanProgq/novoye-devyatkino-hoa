@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "auth.h"
 #include "db.h"
 #include "json.hpp"
 
@@ -20,12 +21,6 @@ namespace {
 bool file_exists(const fs::path& p) {
   std::error_code ec;
   return fs::exists(p, ec);
-}
-
-void add_cors_headers(httplib::Response& res) {
-  res.set_header("Access-Control-Allow-Origin", "*");
-  res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.set_header("Access-Control-Allow-Headers", "Content-Type");
 }
 
 std::string get_form_value(const httplib::Request& req, const std::string& name) {
@@ -351,28 +346,28 @@ bool delete_news(AppContext& ctx, const std::string& id) {
 
 void register_single_news_routes(httplib::Server& server, AppContext& ctx, const std::string& base) {
   // Count
-  server.Get(base + "/count", [&](const httplib::Request&, httplib::Response& res) {
+  server.Get(base + "/count", [&](const httplib::Request& req, httplib::Response& res) {
     int total = 0;
     if (!fetch_news_count(ctx, total)) {
       res.status = 500;
       res.set_content("Failed to load news count", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
     json payload;
     payload["count"] = total;
     res.set_content(payload.dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // List
-  server.Get(base, [&](const httplib::Request&, httplib::Response& res) {
+  server.Get(base, [&](const httplib::Request& req, httplib::Response& res) {
     std::vector<NewsItem> items;
     if (!fetch_news(ctx, items)) {
       res.status = 500;
       res.set_content("Failed to load news", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
@@ -388,11 +383,12 @@ void register_single_news_routes(httplib::Server& server, AppContext& ctx, const
     payload["newsCount"] = total;
 
     res.set_content(payload.dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Create
   server.Post(base, [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     const std::string title = trim(get_form_value(req, "title"));
     const std::string summary = trim(get_form_value(req, "summary"));
     const std::string tag = normalize_tag(get_form_value(req, "tag"));
@@ -400,7 +396,7 @@ void register_single_news_routes(httplib::Server& server, AppContext& ctx, const
     if (title.empty() || summary.empty()) {
       res.status = 400;
       res.set_content("Missing title or summary", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
@@ -421,7 +417,7 @@ void register_single_news_routes(httplib::Server& server, AppContext& ctx, const
         if (!out) {
           res.status = 500;
           res.set_content("Failed to save image", "text/plain");
-          add_cors_headers(res);
+          add_cors_headers(req, res, ctx);
           return;
         }
         out.write(file.content.data(), static_cast<std::streamsize>(file.content.size()));
@@ -437,23 +433,24 @@ void register_single_news_routes(httplib::Server& server, AppContext& ctx, const
       }
       res.status = 500;
       res.set_content("Failed to persist news", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
     res.status = 201;
     res.set_content(serialize_news(item, base).dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Update (accept PUT or POST)
   auto handle_update = [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     const auto& id = req.matches[1];
     NewsItem existing;
     if (!fetch_news_item(ctx, id, existing)) {
       res.status = 404;
       res.set_content("News not found", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
@@ -498,7 +495,7 @@ void register_single_news_routes(httplib::Server& server, AppContext& ctx, const
         if (!out) {
           res.status = 500;
           res.set_content("Failed to save image", "text/plain");
-          add_cors_headers(res);
+          add_cors_headers(req, res, ctx);
           return;
         }
         out.write(file.content.data(), static_cast<std::streamsize>(file.content.size()));
@@ -515,7 +512,7 @@ void register_single_news_routes(httplib::Server& server, AppContext& ctx, const
       }
       res.status = 500;
       res.set_content("Failed to update news", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
@@ -525,7 +522,7 @@ void register_single_news_routes(httplib::Server& server, AppContext& ctx, const
     }
 
     res.set_content(serialize_news(updated, base).dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   };
 
   server.Put(base + R"(/([^/]+))", handle_update);
@@ -533,19 +530,20 @@ void register_single_news_routes(httplib::Server& server, AppContext& ctx, const
 
   // Delete
   server.Delete(base + R"(/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     const auto& id = req.matches[1];
     NewsItem existing;
     if (!fetch_news_item(ctx, id, existing)) {
       res.status = 404;
       res.set_content("News not found", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
     if (!delete_news(ctx, id)) {
       res.status = 500;
       res.set_content("Failed to delete news", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
@@ -555,7 +553,7 @@ void register_single_news_routes(httplib::Server& server, AppContext& ctx, const
     }
 
     res.status = 204;
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Serve image
@@ -565,7 +563,7 @@ void register_single_news_routes(httplib::Server& server, AppContext& ctx, const
     if (!fetch_news_item(ctx, id, item) || item.image_filename.empty()) {
       res.status = 404;
       res.set_content("Image not found", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
@@ -573,7 +571,7 @@ void register_single_news_routes(httplib::Server& server, AppContext& ctx, const
     if (!file_exists(file_path)) {
       res.status = 404;
       res.set_content("Image not found", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
@@ -581,13 +579,13 @@ void register_single_news_routes(httplib::Server& server, AppContext& ctx, const
     if (!file) {
       res.status = 500;
       res.set_content("Failed to read image", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     std::string buffer((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     const std::string mime = guess_image_mime(file_path.extension().string());
     res.set_content(buffer, mime.c_str());
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 }
 

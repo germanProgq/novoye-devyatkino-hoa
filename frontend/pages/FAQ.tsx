@@ -54,20 +54,33 @@ const FAQ: React.FC = () => {
               <button 
                 className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-white/70 transition-colors"
                 onClick={() => setOpenIndex(openIndex === index ? null : index)}
+                aria-expanded={openIndex === index}
+                aria-controls={`faq-panel-${index}`}
               >
                 <div>
                   <span className="text-xs font-bold text-primary mb-1 block">{item.category}</span>
                   <span className="font-semibold text-[var(--color-ink)]">{item.question}</span>
                 </div>
-                <span className={`material-symbols-outlined text-[var(--color-ink-soft)] transition-transform ${openIndex === index ? 'rotate-180' : ''}`}>
+                <span className={`material-symbols-outlined text-[var(--color-ink-soft)] transition-transform duration-300 ${openIndex === index ? 'rotate-180' : ''}`}>
                   expand_more
                 </span>
               </button>
-              {openIndex === index && (
-                <div className="px-6 pb-6 pt-0 text-[var(--color-ink-soft)] leading-relaxed border-t border-[color:var(--color-info-border)] mt-2 pt-4 bg-white/60">
-                  {item.answer}
+              <div
+                id={`faq-panel-${index}`}
+                className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+                  openIndex === index ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                } border-t ${openIndex === index ? 'border-[color:var(--color-info-border)]' : 'border-transparent'} bg-white/60`}
+              >
+                <div className="overflow-hidden">
+                  <div
+                    className={`px-6 pb-6 pt-4 text-[var(--color-ink-soft)] leading-relaxed transition-all duration-300 ${
+                      openIndex === index ? 'translate-y-0' : '-translate-y-1'
+                    }`}
+                  >
+                    {item.answer}
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           ))}
         </div>

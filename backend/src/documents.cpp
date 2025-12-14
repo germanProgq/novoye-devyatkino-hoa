@@ -8,6 +8,7 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "auth.h"
 #include "db.h"
 #include "json.hpp"
 
@@ -41,12 +42,6 @@ std::string guess_mime(const std::string& ext) {
   if (out == ".xls") return "application/vnd.ms-excel";
   if (out == ".xlsx") return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   return "application/octet-stream";
-}
-
-void add_cors_headers(httplib::Response& res) {
-  res.set_header("Access-Control-Allow-Origin", "*");
-  res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.set_header("Access-Control-Allow-Headers", "Content-Type");
 }
 
 std::string to_ascii_slug(const std::string& input) {
@@ -275,12 +270,12 @@ bool insert_document(AppContext& ctx, Document& doc) {
 
 void register_single_document_routes(httplib::Server& server, AppContext& ctx, const std::string& base) {
   // List
-  server.Get(base, [&](const httplib::Request&, httplib::Response& res) {
+  server.Get(base, [&](const httplib::Request& req, httplib::Response& res) {
     std::vector<Document> docs;
     if (!fetch_documents(ctx, docs)) {
       res.status = 500;
       res.set_content("Failed to load documents", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     json body;
@@ -289,28 +284,29 @@ void register_single_document_routes(httplib::Server& server, AppContext& ctx, c
       body["documents"].push_back(serialize_document(doc, ctx.files_dir));
     }
     res.set_content(body.dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Upload
   server.Post(base, [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     if (!req.is_multipart_form_data()) {
       res.status = 400;
       res.set_content("Expected multipart/form-data", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     if (!req.has_file("file")) {
       res.status = 400;
       res.set_content("Missing file field", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     auto file = req.get_file_value("file");
     if (file.content.empty()) {
       res.status = 400;
       res.set_content("Empty file", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
@@ -344,7 +340,7 @@ void register_single_document_routes(httplib::Server& server, AppContext& ctx, c
     if (!out) {
       res.status = 500;
       res.set_content("Failed to save file", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     out.write(file.content.data(), static_cast<std::streamsize>(file.content.size()));
@@ -353,22 +349,23 @@ void register_single_document_routes(httplib::Server& server, AppContext& ctx, c
     if (!insert_document(ctx, doc)) {
       res.status = 500;
       res.set_content("Failed to persist document", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
 
     auto response_body = serialize_document(doc, ctx.files_dir);
     res.status = 201;
     res.set_content(response_body.dump(), "application/json; charset=utf-8");
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Hide
   server.Post(base + R"(/(.+)/hide)", [&](const httplib::Request& req, httplib::Response& res) {
+    if (!authenticate_request(req, res, ctx, true)) return;
     const auto& id = req.matches[1];
     ctx.hidden_ids.insert(id);
     res.status = 204;
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 
   // Download
@@ -378,28 +375,28 @@ void register_single_document_routes(httplib::Server& server, AppContext& ctx, c
     if (!fetch_document_by_id(ctx, id, doc)) {
       res.status = 404;
       res.set_content("Document not found", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     const fs::path file_path = ctx.files_dir / doc.filename;
     if (!file_exists(file_path)) {
       res.status = 404;
       res.set_content("File missing on server", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     std::ifstream file(file_path, std::ios::binary);
     if (!file) {
       res.status = 500;
       res.set_content("Failed to read file", "text/plain");
-      add_cors_headers(res);
+      add_cors_headers(req, res, ctx);
       return;
     }
     std::string buffer((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     const std::string mime = guess_mime(file_path.extension().string());
     res.set_header("Content-Disposition", content_disposition_with_utf8(doc));
     res.set_content(buffer, mime.c_str());
-    add_cors_headers(res);
+    add_cors_headers(req, res, ctx);
   });
 }
 
