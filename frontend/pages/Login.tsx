@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { CSSProperties, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SessionUser, clearSession, fetchCurrentUser, loginWithPassword } from '../utils/auth';
 
@@ -13,6 +13,8 @@ const demoAccounts = [
   { id: 'user', username: 'user', password: 'user', role: 'Пользователь' },
 ];
 
+const staggerStyle = (delay: string): CSSProperties => ({ '--login-delay': delay });
+
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -21,6 +23,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
   const [checkingSession, setCheckingSession] = useState(true);
+  const [animateIn, setAnimateIn] = useState(false);
 
   const fromPath = useMemo(
     () => ((location.state as LocationState | null)?.from?.pathname) || '/dashboard',
@@ -42,6 +45,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     checkExistingSession();
     return () => { mounted = false; };
   }, [fromPath, navigate, onLogin]);
+
+  useEffect(() => {
+    if (checkingSession) return;
+    const frame = requestAnimationFrame(() => setAnimateIn(true));
+    return () => cancelAnimationFrame(frame);
+  }, [checkingSession]);
 
   const goNext = () => navigate(fromPath, { replace: true });
 
@@ -93,15 +102,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-sand)] text-[var(--color-ink)] flex flex-col lg:grid lg:grid-cols-[1.08fr,1fr]">
-      <div className="hidden lg:block relative h-full min-h-screen overflow-hidden">
+    <div className={`login-shell min-h-screen bg-[var(--color-sand)] text-[var(--color-ink)] flex flex-col lg:grid lg:grid-cols-[1.08fr,1fr] ${animateIn ? 'login-shell--visible' : ''}`}>
+      <div className={`hidden lg:block relative h-full min-h-screen overflow-hidden login-visual ${animateIn ? 'login-visual--visible' : ''}`}>
         <img
           src="/images/login/main-login.png"
           alt="Дом и двор ТСЖ"
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-tr from-black/70 via-black/40 to-transparent" />
-        <div className="absolute bottom-10 left-10 right-10 text-white drop-shadow-lg space-y-3">
+        <div className="absolute bottom-10 left-10 right-10 text-white drop-shadow-lg space-y-3 login-stagger" style={staggerStyle('140ms')}>
           <p className="text-xs uppercase tracking-[0.28em] text-white/80">
             Новое девяткино &nbsp;•&nbsp; Вход
           </p>
@@ -113,8 +122,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       </div>
 
       <div className="flex flex-1 items-start lg:items-center justify-center px-4 sm:px-6 md:px-8 py-8 sm:py-10">
-        <div className="w-full max-w-lg bg-white/95 backdrop-blur border border-[color:var(--color-info-border)] rounded-2xl shadow-2xl shadow-[rgba(47,58,42,0.18)] p-6 sm:p-8 space-y-5 sm:space-y-7">
-          <div className="flex items-center gap-3">
+        <div className={`w-full max-w-lg bg-white/95 backdrop-blur border border-[color:var(--color-info-border)] rounded-2xl shadow-2xl shadow-[rgba(47,58,42,0.18)] p-6 sm:p-8 space-y-5 sm:space-y-7 login-card ${animateIn ? 'login-card--visible' : ''}`}>
+          <div className="flex items-center gap-3 login-stagger" style={staggerStyle('90ms')}>
             <img
               src="/images/gerb250.jpg"
               alt="Герб"
@@ -126,7 +135,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 login-stagger" style={staggerStyle('150ms')}>
             <label className="block space-y-2">
               <span className="text-sm font-semibold">Логин</span>
               <div className="relative">
@@ -172,7 +181,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           {error && <p className="text-sm text-accent">{error}</p>}
           {feedback && !error && <p className="text-sm text-[var(--color-ink-soft)]">{feedback}</p>}
 
-          <div className="space-y-3">
+          <div className="space-y-3 login-stagger" style={staggerStyle('210ms')}>
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-[var(--color-ink)]">Готовые тестовые аккаунты</span>
               <button

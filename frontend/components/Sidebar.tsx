@@ -11,7 +11,7 @@ const Sidebar: React.FC<{
 }> = ({ isOpen, onClose, user, onLogout, onSwitchAccount }) => {
   const navItems = [
     { name: 'Главная', path: '/dashboard', icon: 'dashboard' },
-    { name: 'Показания счетчиков', path: '/meters', icon: 'speed' },
+    // { name: 'Показания счетчиков', path: '/meters', icon: 'speed' },
     { name: 'Документы', path: '/documents', icon: 'folder' },
     { name: 'Новости', path: '/news', icon: 'newspaper' },
     { name: 'Заявки', path: '/requests', icon: 'assignment' },

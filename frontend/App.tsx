@@ -47,7 +47,7 @@ const AppLayout: React.FC<{
   const getPageTitle = () => {
     switch (location.pathname) {
       case '/dashboard': return 'Главная';
-      // case '/meters': return 'Показания';
+      case '/meters': return 'Показания';
       case '/documents': return 'Документы';
       case '/news': return 'Новости';
       case '/requests': return 'Заявки';

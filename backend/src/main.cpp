@@ -18,6 +18,7 @@
 #include "documents.h"
 #include "httplib.h"
 #include "news.h"
+#include "requests.h"
 
 namespace fs = std::filesystem;
 
@@ -258,6 +259,8 @@ int main(int argc, char** argv) {
   register_meter_routes(server, ctx, "/api/meters");
   register_debtor_routes(server, ctx, "/debtors");
   register_debtor_routes(server, ctx, "/api/debtors");
+  register_request_routes(server, ctx, "/requests");
+  register_request_routes(server, ctx, "/api/requests");
   register_account_routes(server, ctx, "/accounts");
   register_account_routes(server, ctx, "/api/accounts");
 

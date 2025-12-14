@@ -77,6 +77,16 @@
   --color-ink: #233323;
   --color-ink-soft: #3b4a3b;
 }
+:root[data-theme="dark"] {
+  --color-sand: #151914;              /* background / surface */
+  --color-forest: #c9d3c4;            /* primary text */
+  --color-brick: #d07a52;             /* accent */
+  --color-info-strong: #9fb3cc;       /* info text */
+  --color-info-surface: rgba(159, 179, 204, 0.14);
+  --color-info-border: rgba(159, 179, 204, 0.45);
+  --color-ink: #e6eee3;               /* high-contrast text */
+  --color-ink-soft: #b7c3b5;          /* secondary text */
+}
 
 html {
   scroll-behavior: smooth;
@@ -412,5 +422,96 @@ body.hero-ready .hero-frame-hidden {
   }
   100% {
     transform: translateX(120%);
+  }
+}
+
+.login-shell {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.login-shell::before,
+.login-shell::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  border-radius: 999px;
+  filter: blur(60px);
+  opacity: 0;
+  transform: translateY(18px) scale(0.96);
+  transition: opacity 1s ease, transform 1s ease;
+}
+
+.login-shell::before {
+  width: 380px;
+  height: 380px;
+  top: -120px;
+  right: -60px;
+  background: radial-gradient(circle at 30% 30%, rgba(180, 99, 59, 0.22), rgba(180, 99, 59, 0));
+}
+
+.login-shell::after {
+  width: 460px;
+  height: 460px;
+  bottom: -180px;
+  left: -120px;
+  background: radial-gradient(circle at 70% 70%, rgba(47, 58, 42, 0.22), rgba(47, 58, 42, 0));
+}
+
+.login-shell--visible::before,
+.login-shell--visible::after {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.login-visual {
+  z-index: 1;
+  opacity: 0;
+  transform: translateY(26px) scale(1.02);
+  transition: opacity 0.9s ease, transform 1.05s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.login-visual--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.login-card {
+  position: relative;
+  z-index: 2;
+  opacity: 0;
+  transform: translateY(20px) scale(0.985);
+  transition: opacity 0.75s ease, transform 0.9s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease;
+  transition-delay: 90ms;
+}
+
+.login-card--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.login-stagger {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  transition-delay: var(--login-delay, 0ms);
+}
+
+.login-shell--visible .login-stagger {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-shell::before,
+  .login-shell::after,
+  .login-visual,
+  .login-card,
+  .login-stagger {
+    transition: none !important;
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
