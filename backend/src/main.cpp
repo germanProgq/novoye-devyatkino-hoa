@@ -9,6 +9,7 @@
 #include <string>
 
 #include "auth.h"
+#include "accounts.h"
 #include "context.h"
 #include "contributions.h"
 #include "db.h"
@@ -206,6 +207,8 @@ int main(int argc, char** argv) {
   register_contribution_routes(server, ctx, "/api/contributions");
   register_debtor_routes(server, ctx, "/debtors");
   register_debtor_routes(server, ctx, "/api/debtors");
+  register_account_routes(server, ctx, "/accounts");
+  register_account_routes(server, ctx, "/api/accounts");
 
   const int port = []() {
     if (const char* env = std::getenv("PORT")) {

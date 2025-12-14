@@ -82,3 +82,32 @@ export interface FaqItem {
   answer: string;
   category: string;
 }
+
+export interface AccountUser {
+  username: string;
+  role: string;
+}
+
+export interface AccountPersonLink {
+  id: string;
+  username: string;
+  displayName: string;
+  normalizedName: string;
+  apartment?: string;
+  houses: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AccountDebtEntry extends AccountPersonLink {
+  debt: number;
+  debtorId?: string;
+  note?: string;
+  phone?: string;
+}
+
+export interface AccountDebtSummary {
+  username: string;
+  totalDebt: number;
+  links: AccountDebtEntry[];
+}
