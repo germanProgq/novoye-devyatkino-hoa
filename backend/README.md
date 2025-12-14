@@ -19,6 +19,7 @@ cd backend
 ```
 
 Defaults to port `8080`. Override with `PORT=3001 ./build/hoa_backend`. The server tries to locate `documents/manifest.json` automatically; override with `HOA_DOCS_ROOT=/absolute/path/to/backend/documents`.
+If `HOA_JWT_SECRET` is not provided, the backend now generates one and saves it to `backend/documents/.jwt_secret` so that refresh tokens continue to work across restarts (delete the file to rotate the secret).
 
 ## Docker (backend + Postgres)
 
@@ -49,6 +50,8 @@ Environment overrides (defaults shown) for backend container:
 - `HOA_JWT_SECRET=change-me-in-prod`
 - `HOA_ADMIN_USERNAME=admin` / `HOA_ADMIN_PASSWORD=admin`
 - `HOA_USER_USERNAME=user` / `HOA_USER_PASSWORD=user`
+- `HOA_JWT_SECURE_COOKIES=0` (set to `1` behind HTTPS so cookies are `Secure`)
+- `HOA_JWT_SAMESITE=Lax` (use `None` with secure cookies if frontend and backend are on different origins)
 - `HOA_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:4173,http://localhost:8080`
 
 ## API

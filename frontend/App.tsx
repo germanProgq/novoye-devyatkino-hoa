@@ -8,6 +8,7 @@ import MeterReadings from './pages/MeterReadings';
 import Documents from './pages/Documents';
 import News from './pages/News';
 import FAQ from './pages/FAQ';
+import Requests from './pages/Requests';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import { SessionUser, clearSession, fetchCurrentUser, getStoredSessionUser, isAdmin } from './utils/auth';
@@ -46,9 +47,10 @@ const AppLayout: React.FC<{
   const getPageTitle = () => {
     switch (location.pathname) {
       case '/dashboard': return 'Главная';
-      case '/meters': return 'Показания';
+      // case '/meters': return 'Показания';
       case '/documents': return 'Документы';
       case '/news': return 'Новости';
+      case '/requests': return 'Заявки';
       case '/faq': return 'Вопросы';
       case '/admin': return 'Админ';
       default: return 'Портал ТСЖ';
@@ -273,6 +275,7 @@ const App: React.FC = () => {
             <Route path="/meters" element={<MeterReadings />} />
             <Route path="/documents" element={<Documents />} />
             <Route path="/news" element={<News />} />
+            <Route path="/requests" element={<Requests />} />
             <Route path="/faq" element={<FAQ />} />
             <Route
               path="/admin"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { FaqItem } from '../types';
 
 const faqData: FaqItem[] = [
@@ -25,7 +25,26 @@ const faqData: FaqItem[] = [
 ];
 
 const FAQ: React.FC = () => {
-  const [openIndex, setOpenIndex] = useState<number | null>(0);
+  const [openQuestion, setOpenQuestion] = useState<string | null>(faqData[0]?.question ?? null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredFaqs = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return faqData;
+    return faqData.filter((item) => {
+      const haystack = `${item.question} ${item.answer} ${item.category}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [searchTerm]);
+
+  const handleToggle = (question: string) => {
+    setOpenQuestion((current) => (current === question ? null : question));
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setOpenQuestion(null);
+  };
 
   return (
     <div className="space-y-8">
@@ -40,41 +59,52 @@ const FAQ: React.FC = () => {
               type="text" 
               placeholder="Поиск по вопросам (например: парковка, оплата)..." 
               className="w-full py-4 pl-12 pr-4 rounded-xl text-[var(--color-ink)] focus:outline-none focus:ring-4 focus:ring-white/40 shadow-lg border border-white/40 placeholder:text-[var(--color-ink-soft)]"
+              value={searchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
             <span className="material-symbols-outlined absolute left-4 top-4 text-white/80">search</span>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-4">
-          <h2 className="text-xl font-bold text-[var(--color-ink)] mb-4">Часто задаваемые вопросы</h2>
-          {faqData.map((item, index) => (
-            <div key={index} className="border border-[color:var(--color-info-border)] rounded-xl bg-[var(--color-info-surface)] overflow-hidden backdrop-blur-sm">
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold text-[var(--color-ink)] mb-4">Часто задаваемые вопросы</h2>
+        {filteredFaqs.length === 0 && (
+          <div className="border border-[color:var(--color-info-border)] rounded-xl bg-[var(--color-info-surface)] px-6 py-5 text-[var(--color-ink-soft)]">
+            Не найдено вопросов по запросу "{searchTerm.trim()}". Попробуйте изменить формулировку.
+          </div>
+        )}
+        {filteredFaqs.map((item, index) => {
+          const isOpen = openQuestion === item.question;
+          return (
+            <div
+              key={`${item.category}-${item.question}`}
+              className="border border-[color:var(--color-info-border)] rounded-xl bg-[var(--color-info-surface)] overflow-hidden backdrop-blur-sm"
+            >
               <button 
                 className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-white/70 transition-colors"
-                onClick={() => setOpenIndex(openIndex === index ? null : index)}
-                aria-expanded={openIndex === index}
+                onClick={() => handleToggle(item.question)}
+                aria-expanded={isOpen}
                 aria-controls={`faq-panel-${index}`}
               >
                 <div>
                   <span className="text-xs font-bold text-primary mb-1 block">{item.category}</span>
                   <span className="font-semibold text-[var(--color-ink)]">{item.question}</span>
                 </div>
-                <span className={`material-symbols-outlined text-[var(--color-ink-soft)] transition-transform duration-300 ${openIndex === index ? 'rotate-180' : ''}`}>
+                <span className={`material-symbols-outlined text-[var(--color-ink-soft)] transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>
                   expand_more
                 </span>
               </button>
               <div
                 id={`faq-panel-${index}`}
                 className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-                  openIndex === index ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-                } border-t ${openIndex === index ? 'border-[color:var(--color-info-border)]' : 'border-transparent'} bg-white/60`}
+                  isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                } border-t ${isOpen ? 'border-[color:var(--color-info-border)]' : 'border-transparent'} bg-white/60`}
               >
                 <div className="overflow-hidden">
                   <div
                     className={`px-6 pb-6 pt-4 text-[var(--color-ink-soft)] leading-relaxed transition-all duration-300 ${
-                      openIndex === index ? 'translate-y-0' : '-translate-y-1'
+                      isOpen ? 'translate-y-0' : '-translate-y-1'
                     }`}
                   >
                     {item.answer}
@@ -82,36 +112,8 @@ const FAQ: React.FC = () => {
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-
-        <div className="lg:col-span-1">
-          <div className="bg-[var(--color-info-surface)] p-6 rounded-xl border border-[color:var(--color-info-border)] shadow-sm sticky top-6 backdrop-blur-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-primary">support_agent</span>
-              <h3 className="font-bold text-[var(--color-ink)]">Не нашли ответ?</h3>
-            </div>
-            <p className="text-sm text-[var(--color-ink-soft)] mb-6">Заполните форму, и мы свяжемся с вами в течение 24 часов.</p>
-            
-            <form className="space-y-4" onSubmit={(e) => {e.preventDefault(); alert("Сообщение отправлено!")}}>
-              <div>
-                <label className="block text-xs font-medium text-[var(--color-ink-soft)] mb-1">Ваше имя</label>
-                <input type="text" className="w-full px-3 py-2 border border-[color:var(--color-info-border)] rounded-lg text-sm focus:ring-primary/40 focus:border-primary bg-white text-[var(--color-ink)]" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--color-ink-soft)] mb-1">Email</label>
-                <input type="email" className="w-full px-3 py-2 border border-[color:var(--color-info-border)] rounded-lg text-sm focus:ring-primary/40 focus:border-primary bg-white text-[var(--color-ink)]" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--color-ink-soft)] mb-1">Сообщение</label>
-                <textarea rows={4} className="w-full px-3 py-2 border border-[color:var(--color-info-border)] rounded-lg text-sm focus:ring-primary/40 focus:border-primary bg-white text-[var(--color-ink)]"></textarea>
-              </div>
-              <button className="w-full bg-primary text-white font-medium py-2 rounded-lg hover:bg-accent transition-colors shadow-sm">
-                Отправить вопрос
-              </button>
-            </form>
-          </div>
-        </div>
+          );
+        })}
       </div>
     </div>
   );

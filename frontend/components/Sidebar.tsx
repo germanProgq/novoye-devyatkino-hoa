@@ -14,6 +14,7 @@ const Sidebar: React.FC<{
     { name: 'Показания счетчиков', path: '/meters', icon: 'speed' },
     { name: 'Документы', path: '/documents', icon: 'folder' },
     { name: 'Новости', path: '/news', icon: 'newspaper' },
+    { name: 'Заявки', path: '/requests', icon: 'assignment' },
     { name: 'Вопросы и ответы', path: '/faq', icon: 'help' },
     { name: 'Админ-панель', path: '/admin', icon: 'admin_panel_settings' },
   ];
