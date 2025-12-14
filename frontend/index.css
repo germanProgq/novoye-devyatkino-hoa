@@ -493,6 +493,253 @@ body.hero-ready .hero-frame-hidden {
   transform: translateX(0);
 }
 
+.sidebar-nav-item {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.sidebar-nav-item::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 12px;
+  background: radial-gradient(
+    circle at var(--sidebar-ripple-x, 50%) var(--sidebar-ripple-y, 50%),
+    rgba(35, 51, 35, 0.18),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: scale(0.88);
+  transition: opacity 0.45s ease, transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sidebar-nav-item:hover::before {
+  opacity: 0.06;
+  transform: scale(1);
+}
+
+.sidebar-nav-item.sidebar-nav-pressed::before {
+  opacity: 0.12;
+  animation: sidebarNavRipple 460ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebar-nav-item .sidebar-nav-icon,
+.sidebar-nav-item .sidebar-nav-label {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), color 0.35s ease;
+}
+
+.sidebar-nav-item:hover .sidebar-nav-icon,
+.sidebar-nav-item.sidebar-nav-pressed .sidebar-nav-icon {
+  transform: translateX(2px) scale(1.02);
+}
+
+.sidebar-nav-item:hover .sidebar-nav-label {
+  transform: translateX(1px);
+}
+
+.sidebar-nav-item.sidebar-nav-pressed .sidebar-nav-label {
+  transform: translateX(2px);
+}
+
+@keyframes sidebarNavRipple {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.22;
+  }
+  60% {
+    transform: scale(1.05);
+    opacity: 0.14;
+  }
+  100% {
+    transform: scale(1.12);
+    opacity: 0;
+  }
+}
+
+.soft-tab {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    background-color 0.35s ease,
+    color 0.35s ease,
+    border-color 0.35s ease,
+    box-shadow 0.4s ease,
+    transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.soft-tab::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 14px;
+  background: radial-gradient(
+    circle at var(--tab-ripple-x, 50%) var(--tab-ripple-y, 50%),
+    rgba(35, 51, 35, 0.18),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: scale(0.88);
+  transition: opacity 0.55s ease, transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.soft-tab:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px -18px rgba(35, 51, 35, 0.32);
+}
+
+.soft-tab:hover::before {
+  opacity: 0.06;
+  transform: scale(1);
+}
+
+.soft-tab--active {
+  box-shadow: 0 16px 34px -20px rgba(47, 58, 42, 0.4);
+}
+
+.soft-tab.soft-tab--pressed::before {
+  opacity: 0.14;
+  animation: softTabRipple 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.soft-tab .soft-tab__icon,
+.soft-tab .soft-tab__label,
+.soft-tab .soft-tab__count {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), color 0.3s ease, background-color 0.3s ease;
+}
+
+.soft-tab:hover .soft-tab__label,
+.soft-tab:hover .soft-tab__icon {
+  transform: translateY(-1px);
+}
+
+.soft-tab.soft-tab--pressed .soft-tab__label,
+.soft-tab.soft-tab--pressed .soft-tab__icon {
+  transform: translateY(-2px);
+}
+
+.soft-tab .soft-tab__count {
+  transform-origin: center;
+}
+
+.soft-tab.soft-tab--pressed .soft-tab__count {
+  transform: translateY(-1px) scale(1.04);
+}
+
+/* News stagger intro */
+.news-stagger {
+  will-change: opacity, transform;
+}
+
+.news-stagger--intro {
+  animation: newsStaggerIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--news-delay, 0ms);
+}
+
+.doc-stagger {
+  will-change: opacity, transform;
+}
+
+.doc-stagger--intro {
+  animation: newsStaggerIn 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--doc-delay, 0ms);
+}
+
+@keyframes newsStaggerIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.request-card {
+  position: relative;
+  opacity: 1;
+  transform: translateY(0);
+  will-change: opacity, transform;
+}
+
+.request-card--intro {
+  animation: requestCardFadeIn 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--request-delay, 0ms);
+}
+
+.request-card__inner {
+  animation: requestCardSlideUp 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--request-delay, 0ms) + 120ms);
+}
+
+@keyframes requestCardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes requestCardSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.faq-card {
+  position: relative;
+  will-change: opacity, transform;
+}
+
+.faq-card--intro {
+  animation: faqCardIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--faq-delay, 0ms);
+}
+
+@keyframes faqCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes softTabRipple {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.22;
+  }
+  60% {
+    transform: scale(1.05);
+    opacity: 0.12;
+  }
+  100% {
+    transform: scale(1.1);
+    opacity: 0;
+  }
+}
+
 .admin-tab-panel {
   animation: adminTabSwap 320ms cubic-bezier(0.16, 1, 0.3, 1);
   will-change: opacity, transform;
@@ -610,6 +857,44 @@ body.hero-ready .hero-frame-hidden {
   .sidebar-animate,
   .sidebar-nav-animate {
     transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .sidebar-nav-item::before,
+  .sidebar-nav-item .sidebar-nav-icon,
+  .sidebar-nav-item .sidebar-nav-label {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+  .soft-tab,
+  .soft-tab::before,
+  .soft-tab .soft-tab__icon,
+  .soft-tab .soft-tab__label,
+  .soft-tab .soft-tab__count {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+  }
+  .news-stagger,
+  .news-stagger--intro {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .request-card,
+  .request-card--intro,
+  .request-card__inner {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .faq-card,
+  .faq-card--intro {
+    animation: none !important;
     opacity: 1 !important;
     transform: none !important;
   }

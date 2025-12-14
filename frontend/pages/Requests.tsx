@@ -62,6 +62,7 @@ const Requests: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [introDone, setIntroDone] = useState(false);
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -98,6 +99,25 @@ const Requests: React.FC = () => {
     if (activeTab === 'active') return list.filter((item) => item.status !== 'resolved');
     return list;
   }, [requests, activeTab]);
+
+  const triggerTabFeedback = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) => {
+      const target = event.currentTarget;
+      const rect = target.getBoundingClientRect();
+      const point = 'touches' in event ? event.touches[0] : event;
+      const x = ((point.clientX - rect.left) / rect.width) * 100;
+      const y = ((point.clientY - rect.top) / rect.height) * 100;
+      target.style.setProperty('--tab-ripple-x', `${x}%`);
+      target.style.setProperty('--tab-ripple-y', `${y}%`);
+      target.classList.remove('soft-tab--pressed');
+      // micro-interaction: briefly elevate and fade ripple
+      window.requestAnimationFrame(() => {
+        target.classList.add('soft-tab--pressed');
+        window.setTimeout(() => target.classList.remove('soft-tab--pressed'), 420);
+      });
+    },
+    [],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,6 +180,14 @@ const Requests: React.FC = () => {
     { key: 'all', label: 'Все', count: counts.all },
   ];
 
+  const shouldAnimateRequests = !introDone && !loading && viewMode === 'list' && filteredRequests.length > 0;
+
+  useEffect(() => {
+    if (!shouldAnimateRequests) return undefined;
+    const timer = window.setTimeout(() => setIntroDone(true), 1400);
+    return () => window.clearTimeout(timer);
+  }, [shouldAnimateRequests]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-3">
@@ -169,17 +197,19 @@ const Requests: React.FC = () => {
           return (
             <button
               key={mode}
+              onMouseDown={triggerTabFeedback}
+              onTouchStart={triggerTabFeedback}
               onClick={() => setViewMode(mode as typeof viewMode)}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
+              className={`soft-tab inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
                 isActive
-                  ? 'bg-primary text-white border-primary shadow-sm'
+                  ? 'soft-tab--active bg-primary text-white border-primary shadow-sm'
                   : 'bg-white text-[var(--color-ink)] border-[color:var(--color-info-border)] hover:bg-[var(--color-info-surface)]'
               }`}
             >
-              <span className="material-symbols-outlined text-base">
+              <span className="material-symbols-outlined text-base soft-tab__icon">
                 {mode === 'list' ? 'view_list' : 'add_circle'}
               </span>
-              {label}
+              <span className="soft-tab__label">{label}</span>
             </button>
           );
         })}
@@ -282,17 +312,21 @@ const Requests: React.FC = () => {
                 return (
                   <button
                     key={tab.key}
+                    onMouseDown={triggerTabFeedback}
+                    onTouchStart={triggerTabFeedback}
                     onClick={() => setActiveTab(tab.key)}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
+                    className={`soft-tab inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
                       isActive
-                        ? 'bg-primary text-white border-primary shadow-sm'
+                        ? 'soft-tab--active bg-primary text-white border-primary shadow-sm'
                         : 'bg-white text-[var(--color-ink)] border-[color:var(--color-info-border)] hover:bg-[var(--color-info-surface)]'
                     }`}
                   >
-                    {tab.label}
+                    <span className="soft-tab__label">{tab.label}</span>
                     <span
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-[var(--color-info-surface)] text-[var(--color-ink-soft)]'
+                      className={`soft-tab__count w-6 h-6 rounded-full flex items-center justify-center text-xs ${
+                        isActive
+                          ? 'bg-white/20 text-white'
+                          : 'bg-[var(--color-info-surface)] text-[var(--color-ink-soft)]'
                       }`}
                     >
                       {tab.count}
@@ -346,12 +380,16 @@ const Requests: React.FC = () => {
           </div>
         )}
 
-        {filteredRequests.map((item) => {
+        {filteredRequests.map((item, index) => {
           return (
-            <div
+            <article
               key={item.id}
-              className="bg-white border border-[color:var(--color-info-border)] rounded-xl p-5 shadow-[0_10px_40px_-24px_rgba(0,0,0,0.25)]"
+              className={`request-card bg-white border border-[color:var(--color-info-border)] rounded-xl shadow-[0_10px_40px_-24px_rgba(0,0,0,0.25)] ${
+                shouldAnimateRequests ? 'request-card--intro' : ''
+              }`}
+              style={shouldAnimateRequests ? { ['--request-delay' as string]: `${index * 70}ms` } : undefined}
             >
+              <div className="request-card__inner p-5">
               <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
@@ -373,11 +411,11 @@ const Requests: React.FC = () => {
                 {item.comments && item.comments.length > 0 && (
                   <div className="mt-4 border-t border-[color:var(--color-info-border)] pt-3">
                     <div className="text-xs font-semibold text-[var(--color-ink-soft)] mb-2">Комментарии</div>
-                    <div className="space-y-2">
-                      {item.comments.map((comment) => (
-                        <div key={comment.id} className="text-sm text-[var(--color-ink-soft)] bg-[var(--color-info-surface)] rounded-lg px-3 py-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium text-[var(--color-ink)]">{commentKindLabel[comment.kind] ?? 'Комментарий'}</span>
+                  <div className="space-y-2">
+                    {item.comments.map((comment) => (
+                      <div key={comment.id} className="text-sm text-[var(--color-ink-soft)] bg-[var(--color-info-surface)] rounded-lg px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-[var(--color-ink)]">{commentKindLabel[comment.kind] ?? 'Комментарий'}</span>
                             <span className="text-xs">{formatDate(comment.createdAt)}</span>
                           </div>
                           <div className="mt-1 whitespace-pre-wrap">{comment.text}</div>
@@ -386,7 +424,8 @@ const Requests: React.FC = () => {
                   </div>
                 </div>
               )}
-            </div>
+              </div>
+            </article>
           );
         })}
       </div>

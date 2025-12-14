@@ -1,4 +1,4 @@
-import React, { ReactElement, useEffect, useMemo, useState } from 'react';
+import React, { ReactElement, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, Outlet, Navigate, useNavigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import PageLoader from './components/PageLoader';
@@ -109,6 +109,7 @@ const AppLayout: React.FC<{
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const accountName = useMemo(() => user.username || 'Неизвестный', [user.username]);
   const accountMeta = useMemo(() => (user.role === 'admin' ? 'Администратор' : 'Пользователь'), [user.role]);
   const hasUserData = useHasUserData(user);
@@ -148,6 +149,22 @@ const AppLayout: React.FC<{
     setUserMenuOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (!userMenuOpen) return undefined;
+    const handleOutsideClick = (event: MouseEvent | TouchEvent) => {
+      if (!userMenuRef.current) return;
+      if (!userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, [userMenuOpen]);
+
   return (
     <div className="flex h-screen bg-[var(--color-sand)] text-[var(--color-ink)] font-sans overflow-hidden">
       <Sidebar
@@ -171,7 +188,7 @@ const AppLayout: React.FC<{
             </button>
             <h1 className="font-bold text-lg">{getPageTitle()}</h1>
           </div>
-          <div className="relative">
+          <div className="relative" ref={userMenuRef}>
             <button
               onClick={() => setUserMenuOpen((prev) => !prev)}
               className="w-10 h-10 rounded-full bg-[var(--color-info-surface)] text-[var(--color-ink-soft)] border border-[color:var(--color-info-border)] flex items-center justify-center"
