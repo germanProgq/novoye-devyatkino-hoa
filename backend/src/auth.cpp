@@ -144,10 +144,20 @@ long long to_unix_seconds(const std::chrono::system_clock::time_point& tp) {
   return std::chrono::duration_cast<std::chrono::seconds>(tp.time_since_epoch()).count();
 }
 
+std::string same_site_to_string(SameSitePolicy policy) {
+  switch (policy) {
+    case SameSitePolicy::Strict: return "Strict";
+    case SameSitePolicy::None: return "None";
+    case SameSitePolicy::Lax:
+    default: return "Lax";
+  }
+}
+
 std::string build_cookie(const std::string& name, const std::string& value, const JwtConfig& cfg, std::chrono::seconds max_age) {
   std::ostringstream oss;
-  oss << name << "=" << value << "; Path=/; SameSite=Lax";
-  if (cfg.secure_cookies) oss << "; Secure";
+  const bool use_secure = cfg.secure_cookies || cfg.same_site == SameSitePolicy::None;
+  oss << name << "=" << value << "; Path=/; SameSite=" << same_site_to_string(cfg.same_site);
+  if (use_secure) oss << "; Secure";
   oss << "; HttpOnly";
   if (!cfg.cookie_domain.empty()) {
     oss << "; Domain=" << cfg.cookie_domain;

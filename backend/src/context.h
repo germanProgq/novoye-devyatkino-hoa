@@ -17,6 +17,8 @@ struct DbConfig {
 
 enum class UserRole { User, Admin };
 
+enum class SameSitePolicy { Lax, None, Strict };
+
 struct AuthUser {
   std::string username;
   std::string password_hash;
@@ -31,6 +33,7 @@ struct JwtConfig {
   std::string cookie_domain;
   std::vector<std::string> allowed_origins;
   std::string cookie_prefix = "hoa";
+  SameSitePolicy same_site = SameSitePolicy::Lax;
 };
 
 struct AppContext {

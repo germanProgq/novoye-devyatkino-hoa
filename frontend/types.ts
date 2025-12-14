@@ -68,15 +68,6 @@ export interface DebtorItem {
   updatedAt?: string;
 }
 
-export interface MeterReading {
-  id: number;
-  month: string;
-  hotWater: number;
-  coldWater: number;
-  electricity: number;
-  status: 'Принято' | 'Обработка';
-}
-
 export interface MeterRecord {
   id: string;
   username: string;
@@ -85,6 +76,8 @@ export interface MeterRecord {
   electricity: number;
   createdAt?: string;
 }
+
+export type MeterReading = MeterRecord;
 
 export interface FaqItem {
   question: string;

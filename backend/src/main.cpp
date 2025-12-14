@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <cctype>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <random>
@@ -87,6 +88,43 @@ bool parse_bool(const std::string& value) {
   return lower == "1" || lower == "true" || lower == "yes" || lower == "on";
 }
 
+std::optional<std::string> load_secret_from_file(const fs::path& path) {
+  std::ifstream in(path);
+  if (!in) return std::nullopt;
+  std::ostringstream ss;
+  ss << in.rdbuf();
+  const std::string trimmed = trim_copy(ss.str());
+  if (trimmed.size() < 16) return std::nullopt;
+  return trimmed;
+}
+
+std::string ensure_persistent_jwt_secret(const fs::path& docs_root) {
+  const fs::path secret_path = docs_root / ".jwt_secret";
+  if (auto existing = load_secret_from_file(secret_path)) {
+    return *existing;
+  }
+
+  const std::string generated = random_secret();
+  std::ofstream out(secret_path, std::ios::out | std::ios::trunc);
+  if (out) {
+    out << generated;
+    std::cerr << "[info] HOA_JWT_SECRET not set. Generated secret persisted to " << secret_path << ".\n";
+  } else {
+    std::cerr << "[warn] HOA_JWT_SECRET not set and failed to persist secret to " << secret_path
+              << ". Tokens will reset on restart.\n";
+  }
+  return generated;
+}
+
+SameSitePolicy parse_same_site(const std::string& value) {
+  std::string lower = value;
+  std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  lower = trim_copy(lower);
+  if (lower == "none") return SameSitePolicy::None;
+  if (lower == "strict") return SameSitePolicy::Strict;
+  return SameSitePolicy::Lax;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -123,8 +161,7 @@ int main(int argc, char** argv) {
   ctx.jwt.cookie_prefix = load_env("HOA_JWT_COOKIE_PREFIX", "hoa");
   ctx.jwt.secret = load_env("HOA_JWT_SECRET", "");
   if (ctx.jwt.secret.empty()) {
-    ctx.jwt.secret = random_secret();
-    std::cerr << "[warn] HOA_JWT_SECRET not set. Generated ephemeral secret; tokens will reset on restart.\n";
+    ctx.jwt.secret = ensure_persistent_jwt_secret(*docs_root);
   }
   try {
     ctx.jwt.access_ttl = std::chrono::seconds(std::stoll(load_env("HOA_JWT_ACCESS_TTL", "900")));
@@ -137,6 +174,17 @@ int main(int argc, char** argv) {
     ctx.jwt.refresh_ttl = std::chrono::seconds(604800);
   }
   ctx.jwt.secure_cookies = parse_bool(load_env("HOA_JWT_SECURE_COOKIES", "0"));
+  const std::string same_site_env = load_env("HOA_JWT_SAMESITE", "");
+  if (!same_site_env.empty()) {
+    ctx.jwt.same_site = parse_same_site(same_site_env);
+  } else if (ctx.jwt.secure_cookies) {
+    // For secure deployments default to SameSite=None so httpOnly cookies flow in cross-site SPA requests.
+    ctx.jwt.same_site = SameSitePolicy::None;
+  }
+  if (ctx.jwt.same_site == SameSitePolicy::None && !ctx.jwt.secure_cookies) {
+    std::cerr << "[warn] HOA_JWT_SAMESITE=None requires HOA_JWT_SECURE_COOKIES=1 (HTTPS). Falling back to Lax.\n";
+    ctx.jwt.same_site = SameSitePolicy::Lax;
+  }
   ctx.jwt.cookie_domain = load_env("HOA_JWT_COOKIE_DOMAIN", "");
   ctx.jwt.allowed_origins = split_and_trim(load_env("HOA_CORS_ALLOWED_ORIGINS",
                                                     "http://localhost:5173,http://localhost:4173,http://localhost:8080,http://localhost:3000"));
@@ -226,6 +274,20 @@ int main(int argc, char** argv) {
   std::cout << "[info] Documents served from " << ctx.files_dir << "\n";
   std::cout << "[info] News assets stored at " << ctx.news_dir << "\n";
   std::cout << "[info] DB host=" << ctx.db.host << " port=" << ctx.db.port << " db=" << ctx.db.name << "\n";
+  const auto same_site_label = [](SameSitePolicy p) {
+    switch (p) {
+      case SameSitePolicy::None: return "None";
+      case SameSitePolicy::Strict: return "Strict";
+      case SameSitePolicy::Lax:
+      default: return "Lax";
+    }
+  };
+  std::cout << "[info] Auth cookies SameSite=" << same_site_label(ctx.jwt.same_site)
+            << " Secure=" << (ctx.jwt.secure_cookies ? "on" : "off");
+  if (!ctx.jwt.cookie_domain.empty()) {
+    std::cout << " Domain=" << ctx.jwt.cookie_domain;
+  }
+  std::cout << "\n";
   std::cout << "[info] CORS allowed origins=";
   for (size_t i = 0; i < ctx.jwt.allowed_origins.size(); ++i) {
     if (i) std::cout << ",";
