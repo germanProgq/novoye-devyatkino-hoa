@@ -30,7 +30,7 @@ const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({ steps, billingIte
       <div className="absolute inset-0 opacity-80 bg-[radial-gradient(circle_at_20%_20%,_rgba(35,51,35,0.12),_transparent_40%),_radial-gradient(circle_at_80%_0,_rgba(180,99,59,0.12),_transparent_35%)]" />
       <div className="relative p-6 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-md bg-primary text-white flex items-center justify-center ring-2 ring-[color:var(--color-info-border)]">
+          <div className="w-10 h-10 rounded-md bg-primary text-primary-contrast flex items-center justify-center ring-2 ring-[color:var(--color-info-border)]">
             <span className="material-symbols-outlined">support</span>
           </div>
           <div>

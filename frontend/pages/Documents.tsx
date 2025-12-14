@@ -245,7 +245,7 @@ const Documents: React.FC = () => {
         {isAdminUser && (
           <button
             onClick={() => setUploadOpen((v) => !v)}
-            className="bg-primary hover:bg-accent text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+            className="bg-primary hover:bg-accent text-primary-contrast px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
           >
             <span className="material-symbols-outlined">upload</span>
             {uploadOpen ? 'Скрыть форму' : 'Загрузить документ'}
@@ -365,7 +365,7 @@ const Documents: React.FC = () => {
                 <button
                   type="submit"
                   disabled={uploading}
-                  className="bg-primary hover:bg-accent disabled:opacity-70 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+                  className="bg-primary hover:bg-accent disabled:opacity-70 text-primary-contrast px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
                 >
                   <span className="material-symbols-outlined">upload</span>
                   {uploading ? 'Загрузка...' : 'Загрузить'}
@@ -417,7 +417,7 @@ const Documents: React.FC = () => {
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                   selectedCategory === cat
-                    ? 'bg-primary text-white shadow-sm'
+                    ? 'bg-primary text-primary-contrast shadow-sm'
                     : 'bg-white text-[var(--color-ink-soft)] border border-[color:var(--color-info-border)] hover:bg-[var(--color-info-surface)]'
                 }`}
               >

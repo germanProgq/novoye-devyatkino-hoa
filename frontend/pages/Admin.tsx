@@ -1850,7 +1850,7 @@ const Admin: React.FC = () => {
             <span className="material-symbols-outlined text-primary">verified</span>
             Данные синхронизированы
           </span>
-          <span className="px-3 py-2 rounded-lg bg-primary text-white text-sm flex items-center gap-2 shadow-sm">
+          <span className="px-3 py-2 rounded-lg bg-primary text-primary-contrast text-sm flex items-center gap-2 shadow-sm">
             <span className="material-symbols-outlined text-white">admin_panel_settings</span>
             Режим администратора
           </span>
@@ -1867,7 +1867,7 @@ const Admin: React.FC = () => {
             onClick={() => setTab(tab.id)}
             className={`soft-tab flex items-center justify-center gap-1.5 px-3 md:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap flex-none min-w-[120px] sm:min-w-[140px] ${
               activeTab === tab.id
-                ? 'soft-tab--active bg-primary text-white shadow-sm'
+                ? 'soft-tab--active bg-primary text-primary-contrast shadow-sm'
                 : 'bg-white border border-[color:var(--color-info-border)] text-[var(--color-ink-soft)] hover:bg-[var(--color-info-surface)] hover:text-[var(--color-ink)]'
             }`}
           >
@@ -2086,7 +2086,7 @@ const Admin: React.FC = () => {
             <button
               type="submit"
               disabled={accountLinkSaving || accountUsers.length === 0}
-              className="w-full lg:w-auto px-5 h-11 rounded-lg text-sm font-semibold bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-60 whitespace-nowrap"
+              className="w-full lg:w-auto px-5 h-11 rounded-lg text-sm font-semibold bg-primary text-primary-contrast hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-60 whitespace-nowrap"
             >
               <span className="material-symbols-outlined text-base">link</span>
               {accountLinkSaving ? 'Сохраняем...' : 'Привязать аккаунт'}
@@ -2306,7 +2306,7 @@ const Admin: React.FC = () => {
             <button
               type="submit"
               disabled={contributionLoading}
-              className="w-full px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
+              className="w-full px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-contrast hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
             >
               <span className="material-symbols-outlined text-base">add_circle</span>
               {contributionLoading ? 'Сохраняем...' : 'Добавить взнос'}
@@ -2450,7 +2450,7 @@ const Admin: React.FC = () => {
             <button
               onClick={handleDebtorSubmit}
               disabled={debtorSaving}
-              className="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
+              className="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-contrast hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
             >
               <span className="material-symbols-outlined text-base">add_circle</span>
               {debtorSaving ? 'Сохраняем...' : 'Добавить должника'}
@@ -2665,7 +2665,7 @@ const Admin: React.FC = () => {
                       onClick={() => setAdminRequestFilter(tab.key)}
                       className={`soft-tab inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
                         isActive
-                          ? 'soft-tab--active bg-primary text-white border-primary shadow-sm'
+                          ? 'soft-tab--active bg-primary text-primary-contrast border-primary shadow-sm'
                           : 'bg-white text-[var(--color-ink)] border-[color:var(--color-info-border)] hover:bg-[var(--color-info-surface)]'
                       }`}
                     >
@@ -2914,7 +2914,7 @@ const Admin: React.FC = () => {
                       onClick={() => setNewsForm((prev) => ({ ...prev, tag }))}
                       className={`px-3 py-1.5 rounded-lg text-xs border ${
                         newsForm.tag === tag
-                          ? 'bg-primary text-white border-primary'
+                          ? 'bg-primary text-primary-contrast border-primary'
                           : 'bg-[var(--color-info-surface)] text-[var(--color-ink)] border-[color:var(--color-info-border)] hover:bg-white'
                       }`}
                     >
@@ -2985,7 +2985,7 @@ const Admin: React.FC = () => {
               <button
                 type="submit"
                 disabled={newsSaving}
-                className="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-70"
+                className="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-contrast hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-70"
               >
                 <span className="material-symbols-outlined text-base">{editingNewsId ? 'save' : 'add_circle'}</span>
                 {newsSaving ? 'Сохранение...' : editingNewsId ? 'Сохранить изменения' : 'Опубликовать новость'}
@@ -3211,7 +3211,7 @@ const Admin: React.FC = () => {
             <button
               type="submit"
               disabled={docSaving}
-              className="w-full md:w-auto px-4 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-70 self-stretch md:self-auto"
+              className="w-full md:w-auto px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-contrast hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-70 self-stretch md:self-auto"
             >
               <span className="material-symbols-outlined text-base">upload</span>
               {docSaving ? 'Загрузка...' : 'Загрузить документ'}

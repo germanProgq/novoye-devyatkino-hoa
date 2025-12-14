@@ -187,7 +187,7 @@ const ResidentQuestionPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white font-semibold shadow-sm hover:-translate-y-0.5 hover:bg-accent transition"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-contrast font-semibold shadow-sm hover:-translate-y-0.5 hover:bg-accent transition"
                 >
                   <span className="material-symbols-outlined text-base">send</span>
                   Отправить

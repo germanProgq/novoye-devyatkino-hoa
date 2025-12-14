@@ -21,7 +21,7 @@ const AboutRequisitesPage: React.FC = () => {
             </p>
           </div>
           <a
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-semibold shadow-sm hover:bg-accent transition"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-contrast font-semibold shadow-sm hover:bg-accent transition"
             href={`mailto:${ABOUT_CONTACTS.email.value}`}
           >
             <span className="material-symbols-outlined text-base">edit_square</span>

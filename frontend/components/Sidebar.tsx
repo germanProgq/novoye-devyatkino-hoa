@@ -1,6 +1,7 @@
 import React, { CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { SessionUser, isAdmin } from '../utils/auth';
+import ThemeToggle from './ThemeToggle';
 
 const Sidebar: React.FC<{
   isOpen: boolean;
@@ -102,9 +103,9 @@ const Sidebar: React.FC<{
   }, [menuOpen]);
 
   const sidebarClasses = `
-    fixed inset-y-0 left-0 z-50 w-64 bg-white/90 backdrop-blur border-r border-[color:var(--color-info-border)] transform transition-transform duration-300 ease-in-out
+    fixed inset-y-0 left-0 z-50 w-64 bg-[var(--color-surface)] border-r border-[color:var(--color-info-border)] transform transition-transform duration-300 ease-in-out shadow-xl
     ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-    lg:relative lg:translate-x-0
+    lg:relative lg:translate-x-0 lg:shadow-none
   `;
 
   return (
@@ -156,6 +157,10 @@ const Sidebar: React.FC<{
               </NavLink>
             ))}
           </nav>
+
+          <div className="px-4 pt-2">
+            <ThemeToggle className="w-full justify-center" />
+          </div>
 
           <div className="mt-auto p-4 border-t border-[color:var(--color-info-border)]">
             <div className="relative" ref={menuContainerRef}>

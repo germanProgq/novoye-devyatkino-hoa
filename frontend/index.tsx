@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { ThemeProvider } from './utils/theme';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -15,6 +16,8 @@ if (!document.body.classList.contains('loader-active')) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </React.StrictMode>
 );

@@ -220,7 +220,7 @@ const MeterReadings: React.FC = () => {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full bg-primary hover:bg-accent text-white font-medium py-2.5 rounded-lg transition-colors shadow-sm disabled:opacity-70"
+                className="w-full bg-primary hover:bg-accent text-primary-contrast font-medium py-2.5 rounded-lg transition-colors shadow-sm disabled:opacity-70"
               >
                 {submitting ? 'Отправляем...' : 'Отправить показания'}
               </button>

@@ -172,7 +172,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
             <button
               type="submit"
-              className="w-full py-3 rounded-xl bg-primary text-white font-semibold shadow-lg shadow-primary/30 hover:bg-primary/90 transition"
+              className="w-full py-3 rounded-xl bg-primary text-primary-contrast font-semibold shadow-lg shadow-primary/30 hover:bg-primary/90 transition"
             >
               Войти
             </button>
