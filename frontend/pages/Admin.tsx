@@ -1857,6 +1857,7 @@ const Admin: React.FC = () => {
         ))}
       </div>
 
+      <div key={activeTab} className="admin-tab-panel space-y-6">
       {activeTab === 'overview' && (
         <>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -3232,6 +3233,7 @@ const Admin: React.FC = () => {
         </div>
       </div>
       )}
+      </div>
     </div>
   );
 };

@@ -369,9 +369,6 @@ const Requests: React.FC = () => {
                 <div className="text-xs text-[var(--color-ink-soft)]">
                   Создано {formatDate(item.createdAt)}
                 </div>
-                <div className="text-xs text-[var(--color-ink-soft)]">
-                  Администратор обновит статус по мере обработки заявки
-                </div>
               </div>
                 {item.comments && item.comments.length > 0 && (
                   <div className="mt-4 border-t border-[color:var(--color-info-border)] pt-3">
