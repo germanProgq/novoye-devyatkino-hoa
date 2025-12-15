@@ -546,7 +546,7 @@ const Dashboard: React.FC = () => {
                   </tr>
                 ) : (
                   meterHistorySorted.map((row) => (
-                    <tr key={row.id} className="border-b border-[color:var(--color-info-border)] hover:bg-white/70">
+                    <tr key={row.id} className="border-b border-[color:var(--color-info-border)] hover:bg-[var(--color-info-surface)]">
                       <td className="px-4 sm:px-5 py-2 font-medium text-[var(--color-ink)]">
                         {formatMeterDate(row.createdAt)}
                       </td>
