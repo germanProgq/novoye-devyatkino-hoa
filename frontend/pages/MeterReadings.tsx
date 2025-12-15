@@ -315,7 +315,7 @@ const MeterReadings: React.FC = () => {
                 </tr>
               ) : (
                 meterHistorySorted.map((row) => (
-                  <tr key={row.id} className="border-b border-[color:var(--color-info-border)] hover:bg-white/70">
+                  <tr key={row.id} className="border-b border-[color:var(--color-info-border)] hover:bg-[var(--color-info-surface)]">
                     <td className="px-6 py-4 font-medium text-[var(--color-ink)]">{formatMeterDate(row.createdAt)}</td>
                     <td className="px-6 py-4 text-[var(--color-ink-soft)]">{row.hotWater} м³</td>
                     <td className="px-6 py-4 text-[var(--color-ink-soft)]">{row.coldWater} м³</td>

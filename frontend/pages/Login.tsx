@@ -94,7 +94,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     clearSession();
     setUsername('');
     setPassword('');
-    setFeedback('Данные удалены. Доступ к /dashboard снова заблокирован, пока не авторизуетесь.');
+    setFeedback('Данные удалены.');
   };
 
   if (checkingSession) {

@@ -94,7 +94,7 @@ const FAQ: React.FC = () => {
               style={shouldAnimateFaq ? { ['--faq-delay' as string]: `${index * 70}ms` } : undefined}
             >
               <button 
-                className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-white/70 transition-colors"
+                className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-[var(--color-info-surface)] transition-colors"
                 onClick={() => handleToggle(item.question)}
                 aria-expanded={isOpen}
                 aria-controls={`faq-panel-${index}`}

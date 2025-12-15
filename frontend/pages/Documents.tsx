@@ -449,7 +449,7 @@ const Documents: React.FC = () => {
           {!loading && !error && filteredDocs.map((doc, index) => (
             <div
               key={doc.id}
-              className={`p-4 flex items-start md:items-center gap-4 hover:bg-white/70 transition-colors group doc-stagger ${
+              className={`p-4 flex items-start md:items-center gap-4 hover:bg-[var(--color-info-surface)] transition-colors group doc-stagger ${
                 shouldAnimateDocs ? 'doc-stagger--intro' : ''
               }`}
               style={shouldAnimateDocs ? { ['--doc-delay' as string]: `${index * 70}ms` } : undefined}
