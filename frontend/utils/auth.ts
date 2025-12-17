@@ -5,6 +5,14 @@ export type SessionUser = {
   role: UserRole;
 };
 
+export type RegistrationResult = {
+  user: SessionUser;
+  password: string;
+  displayName?: string;
+  house?: string;
+  apartment?: string;
+};
+
 type SessionMeta = {
   accessExpiresIn?: number;
   refreshExpiresIn?: number;
@@ -101,6 +109,39 @@ export const loginWithPassword = async (username: string, password: string): Pro
   persistSessionUser(user);
   scheduleRefresh(meta);
   return user;
+};
+
+export const registerResident = async (fullName: string, house: string): Promise<RegistrationResult> => {
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ fullName, house }),
+  });
+
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch {
+    // ignore parsing errors below; handled by response.ok check
+  }
+
+  if (!response.ok) {
+    const message = payload?.message || payload?.error || 'Не удалось создать учетную запись';
+    throw new Error(String(message));
+  }
+
+  const user = parseUser(payload?.user);
+  const password = typeof payload?.password === 'string' ? payload.password : '';
+  if (!user || !password) {
+    throw new Error('Сервер не вернул учетные данные');
+  }
+
+  const result: RegistrationResult = { user, password };
+  if (typeof payload?.displayName === 'string') result.displayName = payload.displayName;
+  if (typeof payload?.house === 'string') result.house = payload.house;
+  if (typeof payload?.apartment === 'string') result.apartment = payload.apartment;
+  return result;
 };
 
 export const fetchCurrentUser = async (): Promise<SessionUser | null> => {

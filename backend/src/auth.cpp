@@ -8,10 +8,13 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 
+#include "db.h"
 #include "json.hpp"
 
 using json = nlohmann::json;
@@ -22,6 +25,181 @@ std::string to_lower(const std::string& value) {
   std::string out = value;
   std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   return out;
+}
+
+std::string trim(const std::string& value) {
+  const char* ws = " \t\n\r";
+  const auto start = value.find_first_not_of(ws);
+  if (start == std::string::npos) return std::string();
+  const auto end = value.find_last_not_of(ws);
+  return value.substr(start, end - start + 1);
+}
+
+std::string normalize_spaces(const std::string& s) {
+  std::ostringstream oss;
+  bool prev_space = false;
+  for (char ch : s) {
+    if (std::isspace(static_cast<unsigned char>(ch))) {
+      if (!prev_space) oss << ' ';
+      prev_space = true;
+    } else {
+      oss << ch;
+      prev_space = false;
+    }
+  }
+  return trim(oss.str());
+}
+
+bool decode_utf8(const std::string& input, size_t& i, uint32_t& cp) {
+  unsigned char c = static_cast<unsigned char>(input[i]);
+  if (c < 0x80) {
+    cp = c;
+    ++i;
+    return true;
+  }
+  if ((c >> 5) == 0x6 && i + 1 < input.size()) {
+    cp = ((c & 0x1F) << 6) | (static_cast<unsigned char>(input[i + 1]) & 0x3F);
+    i += 2;
+    return true;
+  }
+  if ((c >> 4) == 0xE && i + 2 < input.size()) {
+    cp = ((c & 0x0F) << 12) | ((static_cast<unsigned char>(input[i + 1]) & 0x3F) << 6) |
+         (static_cast<unsigned char>(input[i + 2]) & 0x3F);
+    i += 3;
+    return true;
+  }
+  if ((c >> 3) == 0x1E && i + 3 < input.size()) {
+    cp = ((c & 0x07) << 18) | ((static_cast<unsigned char>(input[i + 1]) & 0x3F) << 12) |
+         ((static_cast<unsigned char>(input[i + 2]) & 0x3F) << 6) | (static_cast<unsigned char>(input[i + 3]) & 0x3F);
+    i += 4;
+    return true;
+  }
+  ++i;
+  return false;
+}
+
+void encode_utf8(uint32_t cp, std::string& out) {
+  if (cp <= 0x7F) {
+    out.push_back(static_cast<char>(cp));
+  } else if (cp <= 0x7FF) {
+    out.push_back(static_cast<char>(0xC0 | ((cp >> 6) & 0x1F)));
+    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+  } else if (cp <= 0xFFFF) {
+    out.push_back(static_cast<char>(0xE0 | ((cp >> 12) & 0x0F)));
+    out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+  } else {
+    out.push_back(static_cast<char>(0xF0 | ((cp >> 18) & 0x07)));
+    out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+    out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+  }
+}
+
+uint32_t to_lower_codepoint(uint32_t cp) {
+  if (cp >= 0x410 && cp <= 0x42F) return cp + 0x20;  // А-Я
+  if (cp == 0x401) return 0x451;                     // Ё
+  if (cp >= 'A' && cp <= 'Z') return cp + 32;
+  return cp;
+}
+
+std::string to_lower_utf8(const std::string& input) {
+  std::string out;
+  size_t i = 0;
+  while (i < input.size()) {
+    uint32_t cp = 0;
+    if (!decode_utf8(input, i, cp)) continue;
+    encode_utf8(to_lower_codepoint(cp), out);
+  }
+  return out;
+}
+
+std::string canonical_person_key(const std::string& raw) {
+  const std::string normalized = normalize_spaces(trim(raw));
+  const std::string lower = to_lower_utf8(normalized);
+  std::string out;
+  for (size_t i = 0; i < lower.size();) {
+    uint32_t cp = 0;
+    if (!decode_utf8(lower, i, cp)) continue;
+    if (cp == 0x401 || cp == 0x451) cp = 0x435;  // Ё/ё -> Е/е
+    if (std::isalnum(static_cast<unsigned char>(cp)) || cp > 127) {
+      encode_utf8(cp, out);
+    }
+  }
+  return out;
+}
+
+std::string canonical_house(const std::string& raw) {
+  const std::string lower = to_lower_utf8(normalize_spaces(trim(raw)));
+  std::string out;
+  for (size_t i = 0; i < lower.size();) {
+    uint32_t cp = 0;
+    if (!decode_utf8(lower, i, cp)) continue;
+    if (std::isalnum(static_cast<unsigned char>(cp)) || cp > 127) {
+      encode_utf8(cp, out);
+    }
+  }
+  return out;
+}
+
+std::string sanitize_username_segment(const std::string& raw) {
+  std::string out;
+  for (char ch : raw) {
+    unsigned char c = static_cast<unsigned char>(ch);
+    if (std::isalnum(c)) {
+      out.push_back(static_cast<char>(std::tolower(c)));
+    } else if (ch == '-' || ch == '_') {
+      out.push_back(ch);
+    }
+  }
+  if (out.empty()) out = "home";
+  return out;
+}
+
+std::vector<std::string> parse_pg_text_array(const std::string& raw) {
+  std::vector<std::string> out;
+  if (raw.empty()) return out;
+  std::string current;
+  bool in_quotes = false;
+  for (size_t i = 0; i < raw.size(); ++i) {
+    char ch = raw[i];
+    if (ch == '"' && (i == 0 || raw[i - 1] != '\\')) {
+      in_quotes = !in_quotes;
+      continue;
+    }
+    if (!in_quotes && (ch == '{' || ch == '}')) continue;
+    if (!in_quotes && ch == ',') {
+      if (!current.empty()) out.push_back(current);
+      current.clear();
+      continue;
+    }
+    if (ch == '\\' && i + 1 < raw.size()) {
+      ++i;
+      ch = raw[i];
+    }
+    current.push_back(ch);
+  }
+  if (!current.empty()) out.push_back(current);
+  for (auto& val : out) val = trim(val);
+  out.erase(std::remove_if(out.begin(), out.end(), [](const std::string& v) { return v.empty(); }), out.end());
+  return out;
+}
+
+std::string to_pg_text_array(const std::vector<std::string>& values) {
+  if (values.empty()) return "{}";
+  std::ostringstream oss;
+  oss << "{";
+  for (size_t i = 0; i < values.size(); ++i) {
+    if (i > 0) oss << ",";
+    oss << "\"";
+    for (char ch : values[i]) {
+      if (ch == '"' || ch == '\\') oss << "\\";
+      oss << ch;
+    }
+    oss << "\"";
+  }
+  oss << "}";
+  return oss.str();
 }
 
 std::string random_id(size_t length = 16) {
@@ -180,6 +358,174 @@ json serialize_user(const AuthUser& user) {
       {"username", user.username},
       {"role", role_to_string(user.role)},
   };
+}
+
+struct ResidentRecord {
+  std::string display_name;
+  std::string normalized_name;
+  std::string apartment;
+  std::vector<std::string> houses;
+};
+
+std::string generate_resident_username(const std::string& normalized_name, const std::string& canonical_house) {
+  const std::string house_segment = sanitize_username_segment(canonical_house);
+  const std::string seed = normalized_name + "|" + canonical_house;
+  std::string hash = sha256(seed);
+  if (hash.size() < 8) hash = random_id(12);
+  return "res-" + house_segment + "-" + hash.substr(0, 6);
+}
+
+std::string generate_resident_password() {
+  return random_id(12);
+}
+
+void update_cached_user(AppContext& ctx, const AuthUser& user) {
+  const auto target = to_lower(user.username);
+  for (auto& existing : ctx.users) {
+    if (to_lower(existing.username) == target) {
+      existing = user;
+      return;
+    }
+  }
+  ctx.users.push_back(user);
+}
+
+bool ensure_resident_user(AppContext& ctx, const std::string& username, const std::string& password_plain, AuthUser& out_user) {
+  AuthUser user;
+  user.username = username;
+  user.password_hash = hash_password(password_plain);
+  user.role = UserRole::User;
+  if (!upsert_user(ctx.db, user)) return false;
+  update_cached_user(ctx, user);
+  out_user = user;
+  return true;
+}
+
+bool upsert_account_person_link(AppContext& ctx, const std::string& username, const ResidentRecord& person, const std::string& house_fallback) {
+  PGconn* conn = db_connect(ctx.db);
+  if (!conn) return false;
+
+  const std::vector<std::string> houses = !person.houses.empty() ? person.houses : std::vector<std::string>{house_fallback};
+  const std::string houses_array = to_pg_text_array(houses);
+  const std::string link_id = "alink-" + random_id(12);
+  const std::string display = person.display_name.empty() ? person.normalized_name : person.display_name;
+
+  const char* paramValues[6];
+  const int paramLengths[6] = {
+      static_cast<int>(link_id.size()),
+      static_cast<int>(username.size()),
+      static_cast<int>(display.size()),
+      static_cast<int>(person.normalized_name.size()),
+      static_cast<int>(person.apartment.size()),
+      static_cast<int>(houses_array.size()),
+  };
+  const int paramFormats[6] = {0, 0, 0, 0, 0, 0};
+
+  paramValues[0] = link_id.c_str();
+  paramValues[1] = username.c_str();
+  paramValues[2] = display.empty() ? nullptr : display.c_str();
+  paramValues[3] = person.normalized_name.empty() ? nullptr : person.normalized_name.c_str();
+  paramValues[4] = person.apartment.empty() ? nullptr : person.apartment.c_str();
+  paramValues[5] = houses_array.c_str();
+
+  PGresult* res = PQexecParams(conn,
+                               "INSERT INTO account_people (id, username, display_name, normalized_name, apartment, houses, updated_at) "
+                               "VALUES ($1,$2,$3,$4,$5,$6,NOW()) "
+                               "ON CONFLICT (normalized_name) DO UPDATE SET username=EXCLUDED.username, display_name=EXCLUDED.display_name, "
+                               "apartment=EXCLUDED.apartment, houses=EXCLUDED.houses, updated_at=NOW();",
+                               6,
+                               nullptr,
+                               paramValues,
+                               paramLengths,
+                               paramFormats,
+                               0);
+
+  const bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+  PQclear(res);
+  PQfinish(conn);
+  return ok;
+}
+
+bool fetch_resident_records(AppContext& ctx, const std::string& normalized_key, std::vector<ResidentRecord>& out) {
+  PGconn* conn = db_connect(ctx.db);
+  if (!conn) return false;
+
+  const char* paramValues[1] = {normalized_key.c_str()};
+  const int paramLengths[1] = {static_cast<int>(normalized_key.size())};
+  const int paramFormats[1] = {0};
+
+  PGresult* res = PQexecParams(conn,
+                               "SELECT display_name, normalized_name, COALESCE(apartment, ''), ARRAY[house] "
+                               "FROM registration_residents WHERE normalized_name=$1 "
+                               "UNION ALL "
+                               "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), COALESCE(houses, ARRAY[]::TEXT[]) "
+                               "FROM debtors WHERE normalized_name=$1 "
+                               "UNION ALL "
+                               "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), COALESCE(houses, ARRAY[]::TEXT[]) "
+                               "FROM contributions WHERE normalized_name=$1;",
+                               1,
+                               nullptr,
+                               paramValues,
+                               paramLengths,
+                               paramFormats,
+                               0);
+
+  if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+    PQclear(res);
+    PQfinish(conn);
+    return false;
+  }
+
+  out.clear();
+  out.reserve(PQntuples(res));
+
+  auto append_records = [&](PGresult* result, bool filter_by_key) {
+    const int rows = PQntuples(result);
+    for (int i = 0; i < rows; ++i) {
+      ResidentRecord record;
+      record.display_name = PQgetvalue(result, i, 0);
+      const std::string raw_normalized = PQgetvalue(result, i, 1);
+      const std::string canonicalized = canonical_person_key(raw_normalized);
+      record.normalized_name = canonicalized.empty() ? normalized_key : canonicalized;
+      record.apartment = PQgetvalue(result, i, 2);
+      record.houses = parse_pg_text_array(PQgetvalue(result, i, 3));
+      if (filter_by_key && record.normalized_name != normalized_key) continue;
+      out.push_back(std::move(record));
+    }
+  };
+
+  append_records(res, false);
+  PQclear(res);
+
+  if (out.empty()) {
+    PGresult* fallback = PQexec(conn,
+                                "SELECT display_name, normalized_name, COALESCE(apartment, ''), ARRAY[house] "
+                                "FROM registration_residents "
+                                "UNION ALL "
+                                "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), COALESCE(houses, ARRAY[]::TEXT[]) "
+                                "FROM debtors "
+                                "UNION ALL "
+                                "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), COALESCE(houses, ARRAY[]::TEXT[]) "
+                                "FROM contributions;");
+    if (PQresultStatus(fallback) != PGRES_TUPLES_OK) {
+      PQclear(fallback);
+      PQfinish(conn);
+      return false;
+    }
+    append_records(fallback, true);
+    PQclear(fallback);
+  }
+
+  PQfinish(conn);
+  return true;
+}
+
+bool houses_match(const ResidentRecord& record, const std::string& canonical_house_value) {
+  if (canonical_house_value.empty()) return false;
+  for (const auto& h : record.houses) {
+    if (canonical_house(h) == canonical_house_value) return true;
+  }
+  return false;
 }
 
 }  // namespace
@@ -377,6 +723,88 @@ void register_auth_routes(httplib::Server& server, AppContext& ctx, const std::s
   const std::string base = base_path.empty() ? "/auth" : (base_path.front() == '/' ? base_path : "/" + base_path);
   const std::string access_cookie = ctx.jwt.cookie_prefix + "_access_token";
   const std::string refresh_cookie = ctx.jwt.cookie_prefix + "_refresh_token";
+
+  server.Post(base + "/register", [&](const httplib::Request& req, httplib::Response& res) {
+    add_cors_headers(req, res, ctx);
+    json body;
+    try {
+      body = json::parse(req.body);
+    } catch (...) {
+    }
+
+    const std::string raw_name = trim(body.value("fullName", ""));
+    std::string raw_house = body.value("house", "");
+    if (raw_house.empty()) raw_house = body.value("houseNumber", "");
+    raw_house = trim(raw_house);
+
+    if (raw_name.empty() || raw_house.empty()) {
+      res.status = 400;
+      res.set_content(R"({"error":"invalid_input","message":"ФИО и номер дома обязательны"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    const std::string normalized_name = canonical_person_key(raw_name);
+    const std::string canonical_house_value = canonical_house(raw_house);
+    if (normalized_name.empty() || canonical_house_value.empty()) {
+      res.status = 400;
+      res.set_content(R"({"error":"invalid_input","message":"Не удалось распознать данные, проверьте написание"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    std::vector<ResidentRecord> residents;
+    if (!fetch_resident_records(ctx, normalized_name, residents)) {
+      res.status = 500;
+      res.set_content(R"({"error":"db_error","message":"Не удалось проверить данные жильца"})", "application/json; charset=utf-8");
+      return;
+    }
+    if (residents.empty()) {
+      res.status = 404;
+      res.set_content(R"({"error":"resident_not_found","message":"Такой житель не найден в базе"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    ResidentRecord matched;
+    bool has_match = false;
+    for (const auto& rec : residents) {
+      if (houses_match(rec, canonical_house_value)) {
+        matched = rec;
+        has_match = true;
+        break;
+      }
+    }
+    if (!has_match) {
+      res.status = 404;
+      res.set_content(R"({"error":"house_mismatch","message":"Дом не совпал с данными базы"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    if (matched.normalized_name.empty()) matched.normalized_name = normalized_name;
+    if (matched.houses.empty()) matched.houses.push_back(raw_house);
+
+    const std::string username = generate_resident_username(matched.normalized_name, canonical_house_value);
+    const std::string password = generate_resident_password();
+    AuthUser created_user;
+    if (!ensure_resident_user(ctx, username, password, created_user)) {
+      res.status = 500;
+      res.set_content(R"({"error":"persist_error","message":"Не удалось создать учетную запись"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    if (!upsert_account_person_link(ctx, username, matched, raw_house)) {
+      res.status = 500;
+      res.set_content(R"({"error":"link_error","message":"Не удалось связать учетную запись с профилем жильца"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    json payload;
+    payload["user"] = serialize_user(created_user);
+    payload["password"] = password;
+    payload["displayName"] = matched.display_name.empty() ? raw_name : matched.display_name;
+    payload["house"] = raw_house;
+    if (!matched.apartment.empty()) payload["apartment"] = matched.apartment;
+    res.status = 201;
+    res.set_content(payload.dump(), "application/json; charset=utf-8");
+  });
 
   server.Post(base + "/login", [&](const httplib::Request& req, httplib::Response& res) {
     add_cors_headers(req, res, ctx);

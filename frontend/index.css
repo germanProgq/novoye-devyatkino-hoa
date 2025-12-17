@@ -958,6 +958,34 @@ body.hero-ready .hero-frame-hidden {
   transform: translateY(0) scale(1);
 }
 
+.login-card__canvas {
+  position: relative;
+  display: grid;
+  min-height: 560px;
+  perspective: 1600px;
+}
+
+.login-flip {
+  position: relative;
+  display: grid;
+  grid-template-areas: "stack";
+  transform-style: preserve-3d;
+  transition: transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.login-card--flipped .login-flip {
+  transform: rotateY(180deg);
+}
+
+.login-face {
+  grid-area: stack;
+  backface-visibility: hidden;
+}
+
+.login-face--back {
+  transform: rotateY(180deg);
+}
+
 .login-stagger {
   opacity: 0;
   transform: translateY(12px);
@@ -975,6 +1003,9 @@ body.hero-ready .hero-frame-hidden {
   .login-shell::after,
   .login-visual,
   .login-card,
+  .login-card__canvas,
+  .login-flip,
+  .login-face,
   .login-stagger {
     transition: none !important;
     animation: none !important;
@@ -1033,5 +1064,11 @@ body.hero-ready .hero-frame-hidden {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .login-card__canvas {
+    min-height: 520px;
   }
 }

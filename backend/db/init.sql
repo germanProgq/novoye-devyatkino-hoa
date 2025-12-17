@@ -50,6 +50,31 @@ INSERT INTO news (id, title, summary, tag, image_filename, created_at) VALUES
 ('news-sample-3', 'Ремонт лифта в 3 подъезде', 'Заменили тросы и панель управления. Лифт работает в штатном режиме.', 'Ремонт', NULL, NOW() - INTERVAL '1 day')
 ON CONFLICT (id) DO NOTHING;
 
+-- Каталог для саморегистрации: упрощенный справочник ФИО + дом.
+CREATE TABLE IF NOT EXISTS registration_residents (
+  id TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  normalized_name TEXT NOT NULL,
+  house TEXT NOT NULL,
+  apartment TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS registration_residents_norm_idx ON registration_residents (normalized_name);
+CREATE INDEX IF NOT EXISTS registration_residents_house_idx ON registration_residents (house);
+CREATE UNIQUE INDEX IF NOT EXISTS registration_residents_norm_house_idx ON registration_residents (normalized_name, house);
+
+INSERT INTO registration_residents (id, display_name, normalized_name, house, apartment) VALUES
+('reg-1', 'Карпов Олег Игоревич', 'карпов олег игоревич', '1', '1'),
+('reg-2', 'Белова Ирина Аркадьевна', 'белова ирина аркадьевна', '2', '8'),
+('reg-3', 'Зайцев Роман Валерьевич', 'зайцев роман валерьевич', '3', '15'),
+('reg-4', 'Гусева Людмила Борисовна', 'гусева людмила борисовна', '4', '22'),
+('reg-5', 'Комаров Виктор Степанович', 'комаров виктор степанович', '5', '29'),
+('reg-6', 'Киселёва Оксана Леонидовна', 'киселёва оксана леонидовна', '6', '36'),
+('reg-7', 'Поляков Григорий Тимофеевич', 'поляков григорий тимофеевич', '7', '43'),
+('reg-8', 'Борисова Жанна Эдуардовна', 'борисова жанна эдуардовна', '8', '50')
+ON CONFLICT (id) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS contributions (
   id TEXT PRIMARY KEY,
   person_input TEXT,
