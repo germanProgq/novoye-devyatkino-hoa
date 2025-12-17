@@ -8,6 +8,8 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <unordered_set>
+#include <vector>
 
 #include "auth.h"
 #include "accounts.h"
@@ -19,8 +21,10 @@
 #include "httplib.h"
 #include "news.h"
 #include "requests.h"
+#include "json.hpp"
 
 namespace fs = std::filesystem;
+using json = nlohmann::json;
 
 namespace {
 
@@ -126,6 +130,254 @@ SameSitePolicy parse_same_site(const std::string& value) {
   return SameSitePolicy::Lax;
 }
 
+std::string normalize_spaces(const std::string& s) {
+  std::ostringstream oss;
+  bool prev_space = false;
+  for (char ch : s) {
+    if (std::isspace(static_cast<unsigned char>(ch))) {
+      if (!prev_space) oss << ' ';
+      prev_space = true;
+    } else {
+      oss << ch;
+      prev_space = false;
+    }
+  }
+  return trim_copy(oss.str());
+}
+
+bool decode_utf8(const std::string& input, size_t& i, uint32_t& cp) {
+  unsigned char c = static_cast<unsigned char>(input[i]);
+  if (c < 0x80) {
+    cp = c;
+    ++i;
+    return true;
+  }
+  if ((c >> 5) == 0x6 && i + 1 < input.size()) {
+    cp = ((c & 0x1F) << 6) | (static_cast<unsigned char>(input[i + 1]) & 0x3F);
+    i += 2;
+    return true;
+  }
+  if ((c >> 4) == 0xE && i + 2 < input.size()) {
+    cp = ((c & 0x0F) << 12) | ((static_cast<unsigned char>(input[i + 1]) & 0x3F) << 6) |
+         (static_cast<unsigned char>(input[i + 2]) & 0x3F);
+    i += 3;
+    return true;
+  }
+  if ((c >> 3) == 0x1E && i + 3 < input.size()) {
+    cp = ((c & 0x07) << 18) | ((static_cast<unsigned char>(input[i + 1]) & 0x3F) << 12) |
+         ((static_cast<unsigned char>(input[i + 2]) & 0x3F) << 6) | (static_cast<unsigned char>(input[i + 3]) & 0x3F);
+    i += 4;
+    return true;
+  }
+  ++i;
+  return false;
+}
+
+void encode_utf8(uint32_t cp, std::string& out) {
+  if (cp <= 0x7F) {
+    out.push_back(static_cast<char>(cp));
+  } else if (cp <= 0x7FF) {
+    out.push_back(static_cast<char>(0xC0 | ((cp >> 6) & 0x1F)));
+    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+  } else if (cp <= 0xFFFF) {
+    out.push_back(static_cast<char>(0xE0 | ((cp >> 12) & 0x0F)));
+    out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+  } else {
+    out.push_back(static_cast<char>(0xF0 | ((cp >> 18) & 0x07)));
+    out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+    out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+  }
+}
+
+uint32_t to_lower_codepoint(uint32_t cp) {
+  if (cp >= 0x410 && cp <= 0x42F) return cp + 0x20;  // А-Я
+  if (cp == 0x401) return 0x451;                     // Ё
+  if (cp >= 'A' && cp <= 'Z') return cp + 32;
+  return cp;
+}
+
+std::string to_lower_utf8(const std::string& input) {
+  std::string out;
+  size_t i = 0;
+  while (i < input.size()) {
+    uint32_t cp = 0;
+    if (!decode_utf8(input, i, cp)) continue;
+    encode_utf8(to_lower_codepoint(cp), out);
+  }
+  return out;
+}
+
+std::string canonical_person_key(const std::string& raw) {
+  const std::string normalized = normalize_spaces(trim_copy(raw));
+  const std::string lower = to_lower_utf8(normalized);
+  std::string out;
+  for (size_t i = 0; i < lower.size();) {
+    uint32_t cp = 0;
+    if (!decode_utf8(lower, i, cp)) continue;
+    if (cp == 0x401 || cp == 0x451) cp = 0x435;  // Ё/ё -> Е/е
+    if (std::isalnum(static_cast<unsigned char>(cp)) || cp > 127) {
+      encode_utf8(cp, out);
+    }
+  }
+  return out;
+}
+
+std::string canonical_house(const std::string& raw) {
+  const std::string lower = to_lower_utf8(normalize_spaces(trim_copy(raw)));
+  std::string out;
+  for (size_t i = 0; i < lower.size();) {
+    uint32_t cp = 0;
+    if (!decode_utf8(lower, i, cp)) continue;
+    if (std::isalnum(static_cast<unsigned char>(cp)) || cp > 127) {
+      encode_utf8(cp, out);
+    }
+  }
+  return out;
+}
+
+std::string unique_seed_id() {
+  static std::mt19937_64 rng(std::random_device{}());
+  static std::uniform_int_distribution<unsigned long long> dist;
+  auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+  unsigned long long rand_part = dist(rng);
+  std::ostringstream oss;
+  oss << std::hex << now << rand_part;
+  return "regseed-" + oss.str().substr(0, 16);
+}
+
+bool ensure_registration_table(const DbConfig& cfg) {
+  PGconn* conn = db_connect(cfg);
+  if (!conn) return false;
+  const char* ddl =
+      "CREATE TABLE IF NOT EXISTS registration_residents ("
+      "id TEXT PRIMARY KEY,"
+      "display_name TEXT NOT NULL,"
+      "normalized_name TEXT NOT NULL,"
+      "house TEXT NOT NULL,"
+      "apartment TEXT,"
+      "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());"
+      "CREATE INDEX IF NOT EXISTS registration_residents_norm_idx ON registration_residents (normalized_name);"
+      "CREATE INDEX IF NOT EXISTS registration_residents_house_idx ON registration_residents (house);"
+      "CREATE UNIQUE INDEX IF NOT EXISTS registration_residents_norm_house_idx ON registration_residents (normalized_name, house);";
+  PGresult* res = PQexec(conn, ddl);
+  const bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+  PQclear(res);
+  PQfinish(conn);
+  return ok;
+}
+
+bool upsert_registration_resident(const DbConfig& cfg,
+                                  const std::string& id,
+                                  const std::string& display,
+                                  const std::string& normalized,
+                                  const std::string& house,
+                                  const std::string& apartment) {
+  PGconn* conn = db_connect(cfg);
+  if (!conn) return false;
+
+  const char* paramValues[5];
+  const int paramLengths[5] = {
+      static_cast<int>(id.size()),
+      static_cast<int>(display.size()),
+      static_cast<int>(normalized.size()),
+      static_cast<int>(house.size()),
+      static_cast<int>(apartment.size()),
+  };
+  const int paramFormats[5] = {0, 0, 0, 0, 0};
+
+  paramValues[0] = id.c_str();
+  paramValues[1] = display.c_str();
+  paramValues[2] = normalized.c_str();
+  paramValues[3] = house.c_str();
+  paramValues[4] = apartment.empty() ? nullptr : apartment.c_str();
+
+  PGresult* res = PQexecParams(conn,
+                               "INSERT INTO registration_residents (id, display_name, normalized_name, house, apartment) "
+                               "VALUES ($1,$2,$3,$4,$5) "
+                               "ON CONFLICT (normalized_name, house) DO UPDATE SET display_name=EXCLUDED.display_name, apartment=EXCLUDED.apartment;",
+                               5,
+                               nullptr,
+                               paramValues,
+                               paramLengths,
+                               paramFormats,
+                               0);
+  const bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+  PQclear(res);
+  PQfinish(conn);
+  return ok;
+}
+
+bool load_registration_seeds(const DbConfig& cfg, const fs::path& seed_path) {
+  std::ifstream in(seed_path);
+  if (!in) {
+    std::cerr << "[warn] Registration seed file not found: " << seed_path << "\n";
+    return false;
+  }
+
+  json data;
+  try {
+    in >> data;
+  } catch (const std::exception& e) {
+    std::cerr << "[warn] Failed to parse registration seed JSON: " << e.what() << "\n";
+    return false;
+  }
+
+  if (!data.is_array()) {
+    std::cerr << "[warn] Registration seed file must contain an array\n";
+    return false;
+  }
+
+  int inserted = 0;
+  int skipped = 0;
+  for (const auto& item : data) {
+    const std::string display = trim_copy(item.value("displayName", ""));
+    const std::string house_raw = trim_copy(item.value("house", ""));
+    const std::string apartment = trim_copy(item.value("apartment", ""));
+    if (display.empty() || house_raw.empty()) {
+      ++skipped;
+      continue;
+    }
+    std::string normalized = trim_copy(item.value("normalizedName", ""));
+    if (normalized.empty()) normalized = canonical_person_key(display);
+    const std::string canonical_house_value = canonical_house(house_raw);
+    if (normalized.empty() || canonical_house_value.empty()) {
+      ++skipped;
+      continue;
+    }
+    std::string id = trim_copy(item.value("id", ""));
+    if (id.empty()) id = unique_seed_id();
+
+    if (upsert_registration_resident(cfg, id, display, normalized, canonical_house_value, apartment)) {
+      ++inserted;
+    } else {
+      ++skipped;
+    }
+  }
+
+  std::cerr << "[info] Loaded " << inserted << " registration seeds from " << seed_path;
+  if (skipped > 0) std::cerr << " (" << skipped << " skipped)";
+  std::cerr << ".\n";
+  return inserted > 0;
+}
+
+std::optional<fs::path> find_registration_seed(const fs::path& exec_path) {
+  const fs::path exec_dir = exec_path.parent_path();
+  const fs::path cwd = fs::current_path();
+  const fs::path candidates[] = {
+      cwd / "db" / "registration_residents_seed.json",
+      cwd / "backend" / "db" / "registration_residents_seed.json",
+      exec_dir / "db" / "registration_residents_seed.json",
+      exec_dir.parent_path() / "db" / "registration_residents_seed.json",
+  };
+  for (const auto& candidate : candidates) {
+    std::error_code ec;
+    if (fs::exists(candidate, ec)) return candidate;
+  }
+  return std::nullopt;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -191,6 +443,11 @@ int main(int argc, char** argv) {
                                                     "http://localhost:5173,http://localhost:4173,http://localhost:8080,http://localhost:3000"));
   if (ctx.jwt.allowed_origins.empty()) {
     ctx.jwt.allowed_origins.push_back("http://localhost:5173");
+  }
+
+  ensure_registration_table(ctx.db);
+  if (auto seed_path = find_registration_seed(exec_path)) {
+    load_registration_seeds(ctx.db, *seed_path);
   }
 
   const auto normalize_name = [](std::string value) {

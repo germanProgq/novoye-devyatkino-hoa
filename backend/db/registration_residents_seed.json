@@ -1,0 +1,16 @@
+[
+  { "id": "reg-1", "displayName": "Иванов Иван Иванович", "house": "75а", "apartment": "12" },
+  { "id": "reg-2", "displayName": "Петрова Мария Сергеевна", "house": "75а", "apartment": "22" },
+  { "id": "reg-3", "displayName": "Соколов Дмитрий Андреевич", "house": "16", "apartment": "45" },
+  { "id": "reg-4", "displayName": "Ковалёва Анна Владимировна", "house": "15", "apartment": "8" },
+  { "id": "reg-5", "displayName": "Смирнов Алексей Павлович", "house": "10", "apartment": "33" },
+  { "id": "reg-6", "displayName": "Орлова Елена Викторовна", "house": "25", "apartment": "5" },
+  { "id": "reg-7", "displayName": "Новикова Татьяна Олеговна", "house": "30", "apartment": "17" },
+  { "id": "reg-8", "displayName": "Фёдоров Михаил Евгеньевич", "house": "42", "apartment": "3" },
+  { "displayName": "Морозова Алла Викторовна", "house": "12" },
+  { "displayName": "Алексеева Инна Сергеевна", "house": "18б", "apartment": "14" },
+  { "displayName": "Громов Денис Николаевич", "house": "27", "apartment": "41" },
+  { "displayName": "Егорова Ксения Львовна", "house": "33" },
+  { "displayName": "Данилов Петр Александрович", "house": "50", "apartment": "6" },
+  { "displayName": "Никитина Светлана Павловна", "house": "55", "apartment": "9" }
+]
