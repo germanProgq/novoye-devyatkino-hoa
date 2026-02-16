@@ -23,6 +23,7 @@ std::optional<UserRole> role_from_string(const std::string& value);
 std::optional<AuthUser> find_user(const AppContext& ctx, const std::string& username);
 bool verify_password(const AuthUser& user, const std::string& password);
 std::string hash_password(const std::string& password);
+bool reset_user_password(AppContext& ctx, const std::string& username, const std::string& password_plain, AuthUser* out_user = nullptr);
 
 std::string base64url_encode(const std::string& data);
 std::optional<std::string> base64url_decode(const std::string& input);

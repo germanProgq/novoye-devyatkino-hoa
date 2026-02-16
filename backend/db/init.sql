@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS account_people (
   normalized_name TEXT NOT NULL,
   apartment TEXT,
   houses TEXT[],
+  phone TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

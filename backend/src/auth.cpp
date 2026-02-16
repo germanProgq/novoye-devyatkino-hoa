@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdlib>
 #include <iomanip>
 #include <optional>
 #include <random>
@@ -140,6 +141,15 @@ std::string canonical_house(const std::string& raw) {
     }
   }
   return out;
+}
+
+std::string normalize_phone_digits(const std::string& raw) {
+  std::string digits;
+  for (char ch : raw) {
+    if (std::isdigit(static_cast<unsigned char>(ch))) digits.push_back(ch);
+  }
+  if (digits.size() == 11 && digits[0] == '8') digits[0] = '7';
+  return digits;
 }
 
 std::string sanitize_username_segment(const std::string& raw) {
@@ -365,6 +375,7 @@ struct ResidentRecord {
   std::string normalized_name;
   std::string apartment;
   std::vector<std::string> houses;
+  std::string phone;
 };
 
 std::string generate_resident_username(const std::string& normalized_name, const std::string& canonical_house) {
@@ -409,17 +420,19 @@ bool upsert_account_person_link(AppContext& ctx, const std::string& username, co
   const std::string houses_array = to_pg_text_array(houses);
   const std::string link_id = "alink-" + random_id(12);
   const std::string display = person.display_name.empty() ? person.normalized_name : person.display_name;
+  const std::string phone = person.phone;
 
-  const char* paramValues[6];
-  const int paramLengths[6] = {
+  const char* paramValues[7];
+  const int paramLengths[7] = {
       static_cast<int>(link_id.size()),
       static_cast<int>(username.size()),
       static_cast<int>(display.size()),
       static_cast<int>(person.normalized_name.size()),
       static_cast<int>(person.apartment.size()),
       static_cast<int>(houses_array.size()),
+      static_cast<int>(phone.size()),
   };
-  const int paramFormats[6] = {0, 0, 0, 0, 0, 0};
+  const int paramFormats[7] = {0, 0, 0, 0, 0, 0, 0};
 
   paramValues[0] = link_id.c_str();
   paramValues[1] = username.c_str();
@@ -427,13 +440,14 @@ bool upsert_account_person_link(AppContext& ctx, const std::string& username, co
   paramValues[3] = person.normalized_name.empty() ? nullptr : person.normalized_name.c_str();
   paramValues[4] = person.apartment.empty() ? nullptr : person.apartment.c_str();
   paramValues[5] = houses_array.c_str();
+  paramValues[6] = phone.empty() ? nullptr : phone.c_str();
 
   PGresult* res = PQexecParams(conn,
-                               "INSERT INTO account_people (id, username, display_name, normalized_name, apartment, houses, updated_at) "
-                               "VALUES ($1,$2,$3,$4,$5,$6,NOW()) "
+                               "INSERT INTO account_people (id, username, display_name, normalized_name, apartment, houses, phone, updated_at) "
+                               "VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()) "
                                "ON CONFLICT (normalized_name) DO UPDATE SET username=EXCLUDED.username, display_name=EXCLUDED.display_name, "
-                               "apartment=EXCLUDED.apartment, houses=EXCLUDED.houses, updated_at=NOW();",
-                               6,
+                               "apartment=EXCLUDED.apartment, houses=EXCLUDED.houses, phone=EXCLUDED.phone, updated_at=NOW();",
+                               7,
                                nullptr,
                                paramValues,
                                paramLengths,
@@ -455,13 +469,19 @@ bool fetch_resident_records(AppContext& ctx, const std::string& normalized_key, 
   const int paramFormats[1] = {0};
 
   PGresult* res = PQexecParams(conn,
-                               "SELECT display_name, normalized_name, COALESCE(apartment, ''), ARRAY[house] "
+                               "SELECT display_name, normalized_name, COALESCE(apartment, ''), ARRAY[house], '' "
                                "FROM registration_residents WHERE normalized_name=$1 "
                                "UNION ALL "
-                               "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), COALESCE(houses, ARRAY[]::TEXT[]) "
+                               "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), "
+                               "COALESCE(houses, ARRAY[]::TEXT[]), COALESCE(phone, '') "
                                "FROM debtors WHERE normalized_name=$1 "
                                "UNION ALL "
-                               "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), COALESCE(houses, ARRAY[]::TEXT[]) "
+                               "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), "
+                               "COALESCE(houses, ARRAY[]::TEXT[]), COALESCE(phone, '') "
+                               "FROM account_people WHERE normalized_name=$1 "
+                               "UNION ALL "
+                               "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), "
+                               "COALESCE(houses, ARRAY[]::TEXT[]), '' "
                                "FROM contributions WHERE normalized_name=$1;",
                                1,
                                nullptr,
@@ -489,6 +509,7 @@ bool fetch_resident_records(AppContext& ctx, const std::string& normalized_key, 
       record.normalized_name = canonicalized.empty() ? normalized_key : canonicalized;
       record.apartment = PQgetvalue(result, i, 2);
       record.houses = parse_pg_text_array(PQgetvalue(result, i, 3));
+      record.phone = PQgetvalue(result, i, 4);
       if (filter_by_key && record.normalized_name != normalized_key) continue;
       out.push_back(std::move(record));
     }
@@ -499,13 +520,19 @@ bool fetch_resident_records(AppContext& ctx, const std::string& normalized_key, 
 
   if (out.empty()) {
     PGresult* fallback = PQexec(conn,
-                                "SELECT display_name, normalized_name, COALESCE(apartment, ''), ARRAY[house] "
+                                "SELECT display_name, normalized_name, COALESCE(apartment, ''), ARRAY[house], '' "
                                 "FROM registration_residents "
                                 "UNION ALL "
-                                "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), COALESCE(houses, ARRAY[]::TEXT[]) "
+                                "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), "
+                                "COALESCE(houses, ARRAY[]::TEXT[]), COALESCE(phone, '') "
                                 "FROM debtors "
                                 "UNION ALL "
-                                "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), COALESCE(houses, ARRAY[]::TEXT[]) "
+                                "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), "
+                                "COALESCE(houses, ARRAY[]::TEXT[]), COALESCE(phone, '') "
+                                "FROM account_people "
+                                "UNION ALL "
+                                "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), "
+                                "COALESCE(houses, ARRAY[]::TEXT[]), '' "
                                 "FROM contributions;");
     if (PQresultStatus(fallback) != PGRES_TUPLES_OK) {
       PQclear(fallback);
@@ -518,6 +545,137 @@ bool fetch_resident_records(AppContext& ctx, const std::string& normalized_key, 
 
   PQfinish(conn);
   return true;
+}
+
+bool fetch_resident_records_by_phone(AppContext& ctx, const std::string& phone_digits, std::vector<ResidentRecord>& out) {
+  if (phone_digits.empty()) return false;
+  PGconn* conn = db_connect(ctx.db);
+  if (!conn) return false;
+
+  std::string alt_digits = phone_digits;
+  if (alt_digits.size() == 11 && alt_digits[0] == '7') alt_digits[0] = '8';
+
+  const char* paramValues[2] = {phone_digits.c_str(), alt_digits.c_str()};
+  const int paramLengths[2] = {
+      static_cast<int>(phone_digits.size()),
+      static_cast<int>(alt_digits.size()),
+  };
+  const int paramFormats[2] = {0, 0};
+
+  PGresult* res = PQexecParams(conn,
+                               "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), "
+                               "COALESCE(houses, ARRAY[]::TEXT[]), COALESCE(phone, '') "
+                               "FROM account_people "
+                               "WHERE regexp_replace(COALESCE(phone, ''), '\\\\D', '', 'g')=$1 "
+                               "OR regexp_replace(COALESCE(phone, ''), '\\\\D', '', 'g')=$2 "
+                               "UNION ALL "
+                               "SELECT COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), "
+                               "COALESCE(houses, ARRAY[]::TEXT[]), COALESCE(phone, '') "
+                               "FROM debtors "
+                               "WHERE regexp_replace(COALESCE(phone, ''), '\\\\D', '', 'g')=$1 "
+                               "OR regexp_replace(COALESCE(phone, ''), '\\\\D', '', 'g')=$2;",
+                               2,
+                               nullptr,
+                               paramValues,
+                               paramLengths,
+                               paramFormats,
+                               0);
+
+  if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+    PQclear(res);
+    PQfinish(conn);
+    return false;
+  }
+
+  const int rows = PQntuples(res);
+  out.clear();
+  out.reserve(rows);
+  for (int i = 0; i < rows; ++i) {
+    ResidentRecord record;
+    record.display_name = PQgetvalue(res, i, 0);
+    const std::string raw_normalized = PQgetvalue(res, i, 1);
+    const std::string canonicalized = canonical_person_key(raw_normalized);
+    record.normalized_name = canonicalized.empty() ? raw_normalized : canonicalized;
+    record.apartment = PQgetvalue(res, i, 2);
+    record.houses = parse_pg_text_array(PQgetvalue(res, i, 3));
+    record.phone = PQgetvalue(res, i, 4);
+    out.push_back(std::move(record));
+  }
+
+  PQclear(res);
+  PQfinish(conn);
+  return true;
+}
+
+bool fetch_account_phone(AppContext& ctx, const std::string& username, std::string& out_phone) {
+  PGconn* conn = db_connect(ctx.db);
+  if (!conn) return false;
+
+  const char* paramValues[1] = {username.c_str()};
+  const int paramLengths[1] = {static_cast<int>(username.size())};
+  const int paramFormats[1] = {0};
+
+  PGresult* res = PQexecParams(conn,
+                               "SELECT COALESCE(phone, '') "
+                               "FROM account_people WHERE username=$1 "
+                               "ORDER BY updated_at DESC;",
+                               1,
+                               nullptr,
+                               paramValues,
+                               paramLengths,
+                               paramFormats,
+                               0);
+
+  if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+    PQclear(res);
+    PQfinish(conn);
+    return false;
+  }
+
+  const int rows = PQntuples(res);
+  if (rows == 0) {
+    PQclear(res);
+    PQfinish(conn);
+    return false;
+  }
+
+  out_phone.clear();
+  for (int i = 0; i < rows; ++i) {
+    const std::string candidate = PQgetvalue(res, i, 0);
+    if (!candidate.empty()) {
+      out_phone = candidate;
+      break;
+    }
+  }
+
+  PQclear(res);
+  PQfinish(conn);
+  return true;
+}
+
+bool update_account_phone(AppContext& ctx, const std::string& username, const std::string& phone) {
+  PGconn* conn = db_connect(ctx.db);
+  if (!conn) return false;
+
+  const char* paramValues[2] = {username.c_str(), phone.empty() ? nullptr : phone.c_str()};
+  const int paramLengths[2] = {static_cast<int>(username.size()), static_cast<int>(phone.size())};
+  const int paramFormats[2] = {0, 0};
+
+  PGresult* res = PQexecParams(conn,
+                               "UPDATE account_people SET phone=$2, updated_at=NOW() WHERE username=$1;",
+                               2,
+                               nullptr,
+                               paramValues,
+                               paramLengths,
+                               paramFormats,
+                               0);
+
+  const bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+  const char* updated = PQcmdTuples(res);
+  const int updated_rows = updated ? std::atoi(updated) : 0;
+  PQclear(res);
+  PQfinish(conn);
+  return ok && updated_rows > 0;
 }
 
 bool houses_match(const ResidentRecord& record, const std::string& canonical_house_value) {
@@ -556,6 +714,19 @@ bool verify_password(const AuthUser& user, const std::string& password) {
 
 std::string hash_password(const std::string& password) {
   return sha256(password);
+}
+
+bool reset_user_password(AppContext& ctx, const std::string& username, const std::string& password_plain, AuthUser* out_user) {
+  const auto existing = find_user(ctx, username);
+  if (!existing) return false;
+  AuthUser user;
+  user.username = username;
+  user.password_hash = hash_password(password_plain);
+  user.role = existing->role;
+  if (!upsert_user(ctx.db, user)) return false;
+  update_cached_user(ctx, user);
+  if (out_user) *out_user = user;
+  return true;
 }
 
 std::string base64url_encode(const std::string& data) {
@@ -803,6 +974,247 @@ void register_auth_routes(httplib::Server& server, AppContext& ctx, const std::s
     payload["house"] = raw_house;
     if (!matched.apartment.empty()) payload["apartment"] = matched.apartment;
     res.status = 201;
+    res.set_content(payload.dump(), "application/json; charset=utf-8");
+  });
+
+  // Admin registration by house + phone/full name.
+  server.Post(base + "/users", [&](const httplib::Request& req, httplib::Response& res) {
+    add_cors_headers(req, res, ctx);
+    if (!authenticate_request(req, res, ctx, true)) return;
+
+    json body;
+    try {
+      body = json::parse(req.body);
+    } catch (...) {
+      res.status = 400;
+      res.set_content(R"({"error":"invalid_json"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    std::string raw_name = trim(body.value("fullName", ""));
+    if (raw_name.empty()) raw_name = trim(body.value("displayName", ""));
+    if (raw_name.empty()) raw_name = trim(body.value("name", ""));
+
+    std::string raw_phone = trim(body.value("phone", ""));
+    if (raw_phone.empty()) raw_phone = trim(body.value("phoneNumber", ""));
+
+    std::string raw_house = trim(body.value("house", ""));
+    if (raw_house.empty()) raw_house = trim(body.value("houseNumber", ""));
+
+    std::string raw_apartment = trim(body.value("apartment", ""));
+    if (raw_apartment.empty()) raw_apartment = trim(body.value("unit", ""));
+
+    if (raw_house.empty()) {
+      res.status = 400;
+      res.set_content(R"({"error":"invalid_input","message":"Номер дома обязателен"})", "application/json; charset=utf-8");
+      return;
+    }
+    if (raw_name.empty() && raw_phone.empty()) {
+      res.status = 400;
+      res.set_content(R"({"error":"invalid_input","message":"Укажите телефон или ФИО"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    const std::string canonical_house_value = canonical_house(raw_house);
+    if (canonical_house_value.empty()) {
+      res.status = 400;
+      res.set_content(R"({"error":"invalid_input","message":"Не удалось распознать номер дома"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    const std::string normalized_name = canonical_person_key(raw_name);
+    const std::string phone_digits = normalize_phone_digits(raw_phone);
+
+    ResidentRecord matched;
+    bool has_match = false;
+    bool phone_match_conflict = false;
+
+    if (!phone_digits.empty()) {
+      std::vector<ResidentRecord> phone_matches;
+      if (fetch_resident_records_by_phone(ctx, phone_digits, phone_matches) && !phone_matches.empty()) {
+        for (const auto& rec : phone_matches) {
+          if (houses_match(rec, canonical_house_value)) {
+            matched = rec;
+            has_match = true;
+            break;
+          }
+        }
+        if (!has_match && phone_matches.size() == 1 && phone_matches.front().houses.empty()) {
+          matched = phone_matches.front();
+          has_match = true;
+        } else if (!has_match && phone_matches.size() > 1) {
+          phone_match_conflict = true;
+        }
+      }
+    }
+
+    if (!has_match && !normalized_name.empty()) {
+      std::vector<ResidentRecord> residents;
+      if (!fetch_resident_records(ctx, normalized_name, residents)) {
+        res.status = 500;
+        res.set_content(R"({"error":"db_error","message":"Не удалось проверить данные жильца"})", "application/json; charset=utf-8");
+        return;
+      }
+      for (const auto& rec : residents) {
+        if (houses_match(rec, canonical_house_value)) {
+          matched = rec;
+          has_match = true;
+          break;
+        }
+      }
+    }
+
+    if (!has_match && phone_match_conflict) {
+      res.status = 409;
+      res.set_content(R"({"error":"phone_ambiguous","message":"Телефон найден у нескольких жильцов"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    if (!has_match) {
+      matched.display_name = raw_name;
+      matched.normalized_name = normalized_name;
+      matched.apartment = raw_apartment;
+      matched.houses = {raw_house};
+      matched.phone = raw_phone;
+    } else {
+      if (!raw_name.empty()) matched.display_name = raw_name;
+      if (matched.normalized_name.empty()) matched.normalized_name = normalized_name;
+      if (matched.apartment.empty() && !raw_apartment.empty()) matched.apartment = raw_apartment;
+      if (matched.houses.empty()) matched.houses.push_back(raw_house);
+      if (!raw_phone.empty()) matched.phone = raw_phone;
+    }
+
+    if (matched.normalized_name.empty()) {
+      if (!phone_digits.empty()) matched.normalized_name = phone_digits;
+    }
+    if (matched.normalized_name.empty()) {
+      res.status = 400;
+      res.set_content(R"({"error":"invalid_input","message":"Не удалось определить идентификатор жильца"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    bool has_house = false;
+    for (const auto& h : matched.houses) {
+      if (canonical_house(h) == canonical_house_value) {
+        has_house = true;
+        break;
+      }
+    }
+    if (!has_house) matched.houses.push_back(raw_house);
+
+    const std::string username = generate_resident_username(matched.normalized_name, canonical_house_value);
+    const auto existing = find_user(ctx, username);
+    if (existing && existing->role != UserRole::User) {
+      res.status = 409;
+      res.set_content(R"({"error":"username_conflict","message":"Конфликт учетной записи"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    const std::string password = generate_resident_password();
+    AuthUser created_user;
+    bool ok = false;
+    if (existing) {
+      ok = reset_user_password(ctx, username, password, &created_user);
+    } else {
+      ok = ensure_resident_user(ctx, username, password, created_user);
+    }
+    if (!ok) {
+      res.status = 500;
+      res.set_content(R"({"error":"persist_error","message":"Не удалось сохранить учетную запись"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    if (!upsert_account_person_link(ctx, username, matched, raw_house)) {
+      res.status = 500;
+      res.set_content(R"({"error":"link_error","message":"Не удалось связать учетную запись с профилем жильца"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    json payload;
+    payload["user"] = serialize_user(created_user);
+    payload["password"] = password;
+    if (!matched.display_name.empty()) payload["displayName"] = matched.display_name;
+    payload["house"] = raw_house;
+    if (!matched.apartment.empty()) payload["apartment"] = matched.apartment;
+    if (!matched.phone.empty()) payload["phone"] = matched.phone;
+    if (existing) payload["existing"] = true;
+    res.status = existing ? 200 : 201;
+    res.set_content(payload.dump(), "application/json; charset=utf-8");
+  });
+
+  // Update phone for an existing user; resets password if the phone changes or is removed.
+  server.Put(base + R"(/users/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+    add_cors_headers(req, res, ctx);
+    if (!authenticate_request(req, res, ctx, true)) return;
+
+    json body;
+    try {
+      body = json::parse(req.body);
+    } catch (...) {
+      res.status = 400;
+      res.set_content(R"({"error":"invalid_json"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    const std::string username = req.matches[1];
+    if (username.empty()) {
+      res.status = 400;
+      res.set_content(R"({"error":"invalid_input","message":"Логин обязателен"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    const bool has_phone_field = body.contains("phone") || body.contains("phoneNumber");
+    std::string raw_phone = trim(body.value("phone", ""));
+    if (raw_phone.empty()) raw_phone = trim(body.value("phoneNumber", ""));
+    if (!has_phone_field) {
+      res.status = 400;
+      res.set_content(R"({"error":"invalid_input","message":"Телефон обязателен"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    const auto user = find_user(ctx, username);
+    if (!user) {
+      res.status = 404;
+      res.set_content(R"({"error":"user_not_found"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    std::string current_phone;
+    if (!fetch_account_phone(ctx, username, current_phone)) {
+      res.status = 404;
+      res.set_content(R"({"error":"account_link_not_found","message":"Профиль пользователя не найден"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    const std::string current_digits = normalize_phone_digits(current_phone);
+    const std::string new_digits = normalize_phone_digits(raw_phone);
+    const bool phone_changed = current_digits != new_digits;
+
+    if (!update_account_phone(ctx, username, raw_phone)) {
+      res.status = 500;
+      res.set_content(R"({"error":"persist_error","message":"Не удалось обновить телефон"})", "application/json; charset=utf-8");
+      return;
+    }
+
+    json payload;
+    payload["user"] = serialize_user(*user);
+    payload["phone"] = raw_phone;
+    payload["passwordReset"] = false;
+
+    if (phone_changed) {
+      const std::string password = generate_resident_password();
+      AuthUser updated_user;
+      if (!reset_user_password(ctx, username, password, &updated_user)) {
+        res.status = 500;
+        res.set_content(R"({"error":"persist_error","message":"Не удалось обновить пароль"})", "application/json; charset=utf-8");
+        return;
+      }
+      payload["user"] = serialize_user(updated_user);
+      payload["password"] = password;
+      payload["passwordReset"] = true;
+    }
+
+    res.status = 200;
     res.set_content(payload.dump(), "application/json; charset=utf-8");
   });
 

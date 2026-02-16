@@ -21,14 +21,15 @@ cd backend
 Defaults to port `8080`. Override with `PORT=3001 ./build/hoa_backend`. The server tries to locate `documents/manifest.json` automatically; override with `HOA_DOCS_ROOT=/absolute/path/to/backend/documents`.
 If `HOA_JWT_SECRET` is not provided, the backend now generates one and saves it to `backend/documents/.jwt_secret` so that refresh tokens continue to work across restarts (delete the file to rotate the secret).
 
-## Docker (backend + Postgres)
+## Docker (frontend + backend + Postgres)
 
 ```
-docker-compose up --build
+docker compose up --build
 ```
 
-- Backend listens on `http://localhost:8080`
-- Postgres exposed on host port `55432` (internal 5432), credentials: `hoa/hoa_pass`, db `hoa`
+- Frontend is exposed on `http://localhost:3000`
+- Backend is not exposed to the host; frontend proxies backend requests via `/backend/*`
+- Postgres is not exposed to the host and is reachable only by backend on internal Docker network (`db:5432`)
 - Seed data comes from `backend/db/init.sql` and documents are baked into the image at `/app/documents/files`
 
 Auto-rebuild on C++ changes during development:
@@ -61,6 +62,8 @@ Environment overrides (defaults shown) for backend container:
 - `GET /api/contributions` – список взносов жильцов (POST для добавления), `.../parse` для подсказок по ФИО/квартире, `.../summary` для графиков.
 - `GET /api/debtors` – список должников (POST/PUT/DELETE для управления записями).
 - `POST /auth/login` / `/auth/refresh` / `/auth/logout` / `/auth/me` – JWT-based session endpoints (access/refresh tokens are stored in httpOnly cookies).
+- `POST /auth/users` – admin registration by house + phone/full name; returns login + password.
+- `PUT /auth/users/:username` – admin phone update; resets password when phone changes or is removed.
 - `GET/POST /api/requests` – заявки жителей (создать может пользователь, обрабатывать – админ), `PUT .../:id/status` и `POST .../:id/comments` для смены статуса и комментариев.
 
 CORS is open for GET/OPTIONS to simplify local frontend development.

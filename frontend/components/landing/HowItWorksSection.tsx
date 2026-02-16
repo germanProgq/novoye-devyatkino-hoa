@@ -41,7 +41,7 @@ const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({ steps, billingIte
         <div className="bg-[var(--color-sand)]/80 border border-[color:var(--color-info-border)] rounded-xl p-4 space-y-3 backdrop-blur">
           <div className="flex items-center justify-between text-sm text-[var(--color-ink-soft)]">
             <span className="font-medium text-[var(--color-ink)]">Оплата услуг</span>
-            <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-1 rounded-full">Без комиссии</span>
+            {/* <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-1 rounded-full">Без комиссии</span> */}
           </div>
           <div className="space-y-3">
             {billingItems.map((item) => (
@@ -63,7 +63,7 @@ const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({ steps, billingIte
         </div>
         <div className="text-sm text-[var(--color-ink-soft)] flex items-center gap-2">
           <span className="material-symbols-outlined text-base text-primary">lock</span>
-          Онлайн-оплата проходит через защищённый платёжный шлюз
+          Онлайн-оплата проходит через ответственного человека.
         </div>
       </div>
     </div>

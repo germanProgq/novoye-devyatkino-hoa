@@ -335,6 +335,35 @@ type DebtorFormState = {
   note: string;
 };
 
+type RegistrationFormState = {
+  houseId: string;
+  fullName: string;
+  phone: string;
+  apartment: string;
+};
+
+type RegistrationResult = {
+  username: string;
+  password: string;
+  displayName?: string;
+  house?: string;
+  apartment?: string;
+  phone?: string;
+  existing?: boolean;
+};
+
+type PhoneResetFormState = {
+  username: string;
+  phone: string;
+};
+
+type PhoneResetResult = {
+  username: string;
+  phone: string;
+  password?: string;
+  passwordReset: boolean;
+};
+
 type AdminRequestComment = RequestComment;
 type AdminRequest = RequestItem;
 
@@ -374,7 +403,7 @@ const normalizeAdminTab = (value?: string | null): AdminTab => {
 
 const requestStatusMeta: Record<RequestStatus, { label: string; color: string; bg: string; icon: string }> = {
   new: { label: 'Новое', color: 'text-primary', bg: 'bg-primary/10', icon: 'fiber_new' },
-  in_progress: { label: 'В работе', color: 'text-[var(--color-ink)]', bg: 'bg-amber-100', icon: 'build' },
+  in_progress: { label: 'В работе', color: 'text-amber-900', bg: 'bg-amber-100', icon: 'build' },
   resolved: { label: 'Решено', color: 'text-emerald-700', bg: 'bg-emerald-100', icon: 'task_alt' },
 };
 const adminCommentKindLabel: Record<AdminRequestComment['kind'], string> = {
@@ -470,6 +499,22 @@ const Admin: React.FC = () => {
   const [accountLinksLoading, setAccountLinksLoading] = useState(false);
   const [accountLinkSaving, setAccountLinkSaving] = useState(false);
   const [accountLinkError, setAccountLinkError] = useState<string | null>(null);
+  const [registrationForm, setRegistrationForm] = useState<RegistrationFormState>({
+    houseId: houses[0]?.id ?? 'main',
+    fullName: '',
+    phone: '',
+    apartment: '',
+  });
+  const [registrationSaving, setRegistrationSaving] = useState(false);
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
+  const [registrationResult, setRegistrationResult] = useState<RegistrationResult | null>(null);
+  const [phoneResetForm, setPhoneResetForm] = useState<PhoneResetFormState>({
+    username: '',
+    phone: '',
+  });
+  const [phoneResetSaving, setPhoneResetSaving] = useState(false);
+  const [phoneResetError, setPhoneResetError] = useState<string | null>(null);
+  const [phoneResetResult, setPhoneResetResult] = useState<PhoneResetResult | null>(null);
   const [knownPeople, setKnownPeople] = useState<ContributionSuggestion[]>([]);
   const [knownPeopleLoading, setKnownPeopleLoading] = useState(false);
   const [linkPersonQuery, setLinkPersonQuery] = useState('');
@@ -630,6 +675,7 @@ const Admin: React.FC = () => {
     normalizedName: item.normalizedName || item.normalized_name || '',
     apartment: item.apartment || item.unit || undefined,
     houses: Array.isArray(item.houses) ? item.houses.map((h: any) => String(h)) : [],
+    phone: item.phone || '',
     createdAt: item.createdAt || item.created_at || undefined,
     updatedAt: item.updatedAt || item.updated_at || undefined,
   });
@@ -727,6 +773,12 @@ const Admin: React.FC = () => {
         if (prev) return prev;
         const candidate = list.find((u) => u.role === 'user') || list[0];
         return candidate?.username || '';
+      });
+      setPhoneResetForm((prev) => {
+        if (prev.username) return prev;
+        const candidate = list.find((u) => u.role === 'user');
+        const username = candidate?.username || '';
+        return { ...prev, username };
       });
     } catch (err) {
       console.error(err);
@@ -1338,6 +1390,14 @@ const Admin: React.FC = () => {
     return first;
   };
 
+  const resolvePhoneForUser = (username: string) => {
+    if (!username) return '';
+    const match = accountLinks.find((link) => link.username === username && link.phone);
+    return match?.phone || '';
+  };
+
+  const phoneResetOptions = accountUsers.filter((user) => user.role === 'user');
+
   const flushDebtUpdate = useCallback(
     async (id: string) => {
       const amount = pendingDebtUpdates.current[id];
@@ -1462,6 +1522,122 @@ const Admin: React.FC = () => {
     const formatted = formatSuggestionInput(person) || person.displayName || person.normalizedName || '';
     setLinkPersonQuery(formatted);
     setLinkSuggestionsOpen(false);
+  };
+
+  const handleResidentRegistration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const fullName = registrationForm.fullName.trim();
+    const phone = registrationForm.phone.trim();
+    const apartment = registrationForm.apartment.trim();
+    const houseMeta = houses.find((house) => house.id === registrationForm.houseId);
+    const houseLabel = houseMeta?.label || registrationForm.houseId;
+
+    if (!houseLabel.trim()) {
+      setRegistrationError('Укажите дом');
+      return;
+    }
+    if (!fullName && !phone) {
+      setRegistrationError('Укажите телефон или ФИО');
+      return;
+    }
+
+    setRegistrationError(null);
+    setRegistrationResult(null);
+    setRegistrationSaving(true);
+
+    const payload: Record<string, string> = { house: houseLabel };
+    if (fullName) payload.fullName = fullName;
+    if (phone) payload.phone = phone;
+    if (apartment) payload.apartment = apartment;
+
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/auth/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      let responseJson: any = null;
+      try {
+        responseJson = await response.json();
+      } catch {
+        // ignore parsing errors below
+      }
+      if (!response.ok) {
+        const message = responseJson?.message || responseJson?.error || 'Не удалось создать пользователя';
+        throw new Error(String(message));
+      }
+
+      const username = responseJson?.user?.username || '';
+      const password = responseJson?.password || '';
+      if (!username || !password) {
+        throw new Error('Сервер не вернул логин и пароль');
+      }
+
+      setRegistrationResult({
+        username,
+        password,
+        displayName: responseJson?.displayName || '',
+        house: responseJson?.house || houseLabel,
+        apartment: responseJson?.apartment || apartment || '',
+        phone: responseJson?.phone || phone || '',
+        existing: Boolean(responseJson?.existing),
+      });
+      setRegistrationForm((prev) => ({ ...prev, fullName: '', phone: '', apartment: '' }));
+      loadAccountUsers();
+      loadAccountLinks();
+    } catch (err) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : 'Не удалось создать пользователя';
+      setRegistrationError(message);
+    } finally {
+      setRegistrationSaving(false);
+    }
+  };
+
+  const handlePhoneReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const username = phoneResetForm.username.trim();
+    const phone = phoneResetForm.phone.trim();
+    if (!username) {
+      setPhoneResetError('Выберите пользователя');
+      return;
+    }
+
+    setPhoneResetError(null);
+    setPhoneResetResult(null);
+    setPhoneResetSaving(true);
+
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/auth/users/${encodeURIComponent(username)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      let responseJson: any = null;
+      try {
+        responseJson = await response.json();
+      } catch {
+        // ignore parsing errors below
+      }
+      if (!response.ok) {
+        const message = responseJson?.message || responseJson?.error || 'Не удалось обновить телефон';
+        throw new Error(String(message));
+      }
+
+      setPhoneResetResult({
+        username,
+        phone: responseJson?.phone ?? phone,
+        password: typeof responseJson?.password === 'string' ? responseJson.password : undefined,
+        passwordReset: Boolean(responseJson?.passwordReset),
+      });
+      loadAccountLinks();
+    } catch (err) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : 'Не удалось обновить телефон';
+      setPhoneResetError(message);
+    } finally {
+      setPhoneResetSaving(false);
+    }
   };
 
   const handleAccountLinkSubmit = async (e: React.FormEvent) => {
@@ -1983,7 +2159,214 @@ const Admin: React.FC = () => {
       )}
 
       {activeTab === 'accounts' && (
-      <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-6 backdrop-blur-sm relative overflow-visible z-40">
+      <div className="space-y-6">
+        <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-6 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-semibold text-[var(--color-ink)]">Регистрация жильца</h3>
+              <p className="text-sm text-[var(--color-ink-soft)]">
+                Укажите дом и телефон или ФИО — выдадим логин и пароль.
+              </p>
+            </div>
+            <span className="hidden md:inline-flex text-xs text-[var(--color-ink-soft)] px-3 py-1 rounded-full bg-white border border-[color:var(--color-info-border)]">
+              Новый доступ
+            </span>
+          </div>
+
+          {registrationError && (
+            <div className="mb-3 text-sm text-accent bg-accent/10 border border-accent/30 rounded-lg px-3 py-2">
+              {registrationError}
+            </div>
+          )}
+
+          {registrationResult && (
+            <div className="mb-4 rounded-lg border border-[color:var(--color-info-border)] bg-white px-3 py-3 text-sm">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="px-2 py-1 rounded-md bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
+                  Логин: <span className="font-mono font-semibold">{registrationResult.username}</span>
+                </span>
+                <span className="px-2 py-1 rounded-md bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
+                  Пароль: <span className="font-mono font-semibold">{registrationResult.password}</span>
+                </span>
+                {registrationResult.existing && (
+                  <span className="px-2 py-1 rounded-md bg-white border border-[color:var(--color-info-border)] text-[var(--color-ink-soft)]">
+                    Пароль обновлен
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-[var(--color-ink-soft)]">
+                {registrationResult.displayName && (
+                  <span className="px-2 py-0.5 rounded-full bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
+                    {registrationResult.displayName}
+                  </span>
+                )}
+                {registrationResult.house && (
+                  <span className="px-2 py-0.5 rounded-full bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
+                    Дом: {registrationResult.house}
+                  </span>
+                )}
+                {registrationResult.apartment && (
+                  <span className="px-2 py-0.5 rounded-full bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
+                    Кв. {registrationResult.apartment}
+                  </span>
+                )}
+                {registrationResult.phone && (
+                  <span className="px-2 py-0.5 rounded-full bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
+                    {registrationResult.phone}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <form
+            onSubmit={handleResidentRegistration}
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1.4fr,1fr,1fr,1fr,auto] gap-3 items-end"
+          >
+            <div className="space-y-2 min-w-0">
+              <label className="text-sm text-[var(--color-ink-soft)]">Дом</label>
+              <select
+                value={registrationForm.houseId}
+                onChange={(e) => setRegistrationForm((prev) => ({ ...prev, houseId: e.target.value }))}
+                className="w-full h-11 border border-[color:var(--color-info-border)] rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white text-[var(--color-ink)]"
+              >
+                {houses.map((house) => (
+                  <option key={house.id} value={house.id}>
+                    {house.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2 min-w-0">
+              <label className="text-sm text-[var(--color-ink-soft)]">Телефон</label>
+              <input
+                type="text"
+                value={registrationForm.phone}
+                onChange={(e) => setRegistrationForm((prev) => ({ ...prev, phone: e.target.value }))}
+                className="w-full h-11 border border-[color:var(--color-info-border)] rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white text-[var(--color-ink)]"
+                placeholder="+7 ..."
+              />
+            </div>
+            <div className="space-y-2 min-w-0">
+              <label className="text-sm text-[var(--color-ink-soft)]">ФИО</label>
+              <input
+                type="text"
+                value={registrationForm.fullName}
+                onChange={(e) => setRegistrationForm((prev) => ({ ...prev, fullName: e.target.value }))}
+                className="w-full h-11 border border-[color:var(--color-info-border)] rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white text-[var(--color-ink)]"
+                placeholder="Иванов Иван Иванович"
+              />
+            </div>
+            <div className="space-y-2 min-w-0">
+              <label className="text-sm text-[var(--color-ink-soft)]">Квартира</label>
+              <input
+                type="text"
+                value={registrationForm.apartment}
+                onChange={(e) => setRegistrationForm((prev) => ({ ...prev, apartment: e.target.value }))}
+                className="w-full h-11 border border-[color:var(--color-info-border)] rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white text-[var(--color-ink)]"
+                placeholder="Опционально"
+              />
+            </div>
+            <div className="flex items-end justify-start xl:justify-end">
+              <button
+                type="submit"
+                disabled={registrationSaving}
+                className="w-full xl:w-auto px-5 h-11 rounded-lg text-sm font-semibold bg-primary text-primary-contrast hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-60 whitespace-nowrap"
+              >
+                <span className="material-symbols-outlined text-base">person_add</span>
+                {registrationSaving ? 'Создаем...' : 'Выдать логин'}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-6 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-semibold text-[var(--color-ink)]">Смена телефона и сброс пароля</h3>
+              <p className="text-sm text-[var(--color-ink-soft)]">
+                Обновите телефон жильца — при изменении пароль будет сброшен.
+              </p>
+            </div>
+          </div>
+
+          {phoneResetError && (
+            <div className="mb-3 text-sm text-accent bg-accent/10 border border-accent/30 rounded-lg px-3 py-2">
+              {phoneResetError}
+            </div>
+          )}
+
+          {phoneResetResult && (
+            <div className="mb-4 rounded-lg border border-[color:var(--color-info-border)] bg-white px-3 py-3 text-sm">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="px-2 py-1 rounded-md bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
+                  Логин: <span className="font-mono font-semibold">{phoneResetResult.username}</span>
+                </span>
+                <span className="px-2 py-1 rounded-md bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
+                  Телефон: <span className="font-mono font-semibold">{phoneResetResult.phone || '—'}</span>
+                </span>
+                {phoneResetResult.passwordReset ? (
+                  <span className="px-2 py-1 rounded-md bg-[var(--color-info-surface)] border border-[color:var(--color-info-border)]">
+                    Пароль: <span className="font-mono font-semibold">{phoneResetResult.password ?? '—'}</span>
+                  </span>
+                ) : (
+                  <span className="px-2 py-1 rounded-md bg-white border border-[color:var(--color-info-border)] text-[var(--color-ink-soft)]">
+                    Пароль без изменений
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <form
+            onSubmit={handlePhoneReset}
+            className="grid grid-cols-1 md:grid-cols-[1.2fr,1fr,auto] gap-3 items-end"
+          >
+            <div className="space-y-2 min-w-0">
+              <label className="text-sm text-[var(--color-ink-soft)]">Пользователь</label>
+              <select
+                value={phoneResetForm.username}
+                onChange={(e) => {
+                  const username = e.target.value;
+                  setPhoneResetForm({ username, phone: resolvePhoneForUser(username) });
+                }}
+                className="w-full h-11 border border-[color:var(--color-info-border)] rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white text-[var(--color-ink)]"
+              >
+                {phoneResetOptions.length === 0 && <option value="">Нет пользователей</option>}
+                {phoneResetOptions.map((user) => (
+                  <option key={user.username} value={user.username}>
+                    {user.username}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2 min-w-0">
+              <label className="text-sm text-[var(--color-ink-soft)]">Телефон</label>
+              <input
+                type="text"
+                value={phoneResetForm.phone}
+                onChange={(e) => setPhoneResetForm((prev) => ({ ...prev, phone: e.target.value }))}
+                className="w-full h-11 border border-[color:var(--color-info-border)] rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white text-[var(--color-ink)]"
+                placeholder="+7 ..."
+              />
+            </div>
+            <div className="flex items-end justify-start md:justify-end">
+              <button
+                type="submit"
+                disabled={phoneResetSaving || phoneResetOptions.length === 0}
+                className="w-full md:w-auto px-5 h-11 rounded-lg text-sm font-semibold bg-primary text-primary-contrast hover:bg-accent transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-60 whitespace-nowrap"
+              >
+                <span className="material-symbols-outlined text-base">refresh</span>
+                {phoneResetSaving ? 'Обновляем...' : 'Обновить телефон'}
+              </button>
+            </div>
+          </form>
+          <p className="text-xs text-[var(--color-ink-soft)] mt-2">
+            Оставьте поле пустым, чтобы удалить телефон и выдать новый пароль.
+          </p>
+        </div>
+
+        <div className="bg-[var(--color-info-surface)] rounded-xl border border-[color:var(--color-info-border)] shadow-sm p-6 backdrop-blur-sm relative overflow-visible z-40">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-semibold text-[var(--color-ink)]">Привязка жильцов к аккаунтам</h3>
@@ -2126,6 +2509,11 @@ const Admin: React.FC = () => {
                         Дом: {link.houses.join(', ')}
                       </span>
                     )}
+                    {link.phone && (
+                      <span className="px-2 py-0.5 bg-[var(--color-info-surface)] rounded border border-[color:var(--color-info-border)]">
+                        {link.phone}
+                      </span>
+                    )}
                     {link.updatedAt && (
                       <span className="text-[var(--color-ink-soft)]">
                         Обновлено {formatDateWithShortMonth(link.updatedAt)}
@@ -2142,6 +2530,7 @@ const Admin: React.FC = () => {
               </div>
             );
           })}
+        </div>
         </div>
       </div>
 
