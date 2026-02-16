@@ -44,12 +44,6 @@ CREATE TABLE IF NOT EXISTS news (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-INSERT INTO news (id, title, summary, tag, image_filename, created_at) VALUES
-('news-sample-1', 'Плановое отключение горячей воды', 'Подача горячей воды будет приостановлена с 15 по 17 ноября из-за профилактических работ на теплотрассе.', 'Важно', NULL, NOW() - INTERVAL '5 days'),
-('news-sample-2', 'Субботник во дворе', 'Приглашаем жильцов принять участие в субботнике. Инвентарь выдадим на месте, после работы — чай и выпечка.', 'Событие', NULL, NOW() - INTERVAL '3 days'),
-('news-sample-3', 'Ремонт лифта в 3 подъезде', 'Заменили тросы и панель управления. Лифт работает в штатном режиме.', 'Ремонт', NULL, NOW() - INTERVAL '1 day')
-ON CONFLICT (id) DO NOTHING;
-
 -- Каталог для саморегистрации: упрощенный справочник ФИО + дом.
 CREATE TABLE IF NOT EXISTS registration_residents (
   id TEXT PRIMARY KEY,
@@ -63,17 +57,6 @@ CREATE TABLE IF NOT EXISTS registration_residents (
 CREATE INDEX IF NOT EXISTS registration_residents_norm_idx ON registration_residents (normalized_name);
 CREATE INDEX IF NOT EXISTS registration_residents_house_idx ON registration_residents (house);
 CREATE UNIQUE INDEX IF NOT EXISTS registration_residents_norm_house_idx ON registration_residents (normalized_name, house);
-
-INSERT INTO registration_residents (id, display_name, normalized_name, house, apartment) VALUES
-('reg-1', 'Иванов Иван Иванович', 'иванов иван иванович', '75а', '12'),
-('reg-2', 'Петрова Мария Сергеевна', 'петрова мария сергеевна', '75а', '22'),
-('reg-3', 'Соколов Дмитрий Андреевич', 'соколов дмитрий андреевич', '16', '45'),
-('reg-4', 'Ковалёва Анна Владимировна', 'ковалёва анна владимировна', '15', '8'),
-('reg-5', 'Смирнов Алексей Павлович', 'смирнов алексей павлович', '10', '33'),
-('reg-6', 'Орлова Елена Викторовна', 'орлова елена викторовна', '25', '5'),
-('reg-7', 'Новикова Татьяна Олеговна', 'новикова татьяна олеговна', '30', '17'),
-('reg-8', 'Фёдоров Михаил Евгеньевич', 'фёдоров михаил евгеньевич', '42', '3')
-ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS contributions (
   id TEXT PRIMARY KEY,
@@ -104,28 +87,12 @@ CREATE TABLE IF NOT EXISTS debtors (
 
 CREATE INDEX IF NOT EXISTS debtors_normalized_idx ON debtors (normalized_name);
 
-INSERT INTO contributions (id, person_input, display_name, normalized_name, apartment, houses, month, amount, note, created_at) VALUES
-('contrib-sample-1', 'кв 14 ковалева 15/16', 'Ковалёва', 'ковалёва', '14', ARRAY['15','16'], 'Ноя', 4200.00, 'Безналичный перевод', NOW() - INTERVAL '2 days'),
-('contrib-sample-2', 'иванов кв8', 'Иванов', 'иванов', '8', ARRAY['75А'], 'Окт', 3800.50, 'Оплата содержания жилья', NOW() - INTERVAL '10 days')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO debtors (id, display_name, normalized_name, apartment, houses, phone, debt, note, updated_at) VALUES
-('debtor-sample-1', 'Петрова', 'петрова', '22', ARRAY['75А'], '+7 900 000-00-00', 5200.00, 'Планирует оплатить до конца месяца', NOW() - INTERVAL '1 day'),
-('debtor-sample-2', 'Ковалёва', 'ковалёва', '14', ARRAY['15','16'], '+7 911 111-11-11', 3100.00, 'Частичная оплата', NOW() - INTERVAL '3 days')
-ON CONFLICT (id) DO NOTHING;
-
 CREATE TABLE IF NOT EXISTS users (
   username TEXT PRIMARY KEY,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
--- Seed demo users; backend overwrites password hashes on startup from env vars.
-INSERT INTO users (username, password_hash, role) VALUES
-('admin', 'placeholder', 'admin'),
-('user', 'placeholder', 'user')
-ON CONFLICT (username) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS account_people (
   id TEXT PRIMARY KEY,
@@ -179,13 +146,3 @@ CREATE TABLE IF NOT EXISTS request_comments (
 );
 
 CREATE INDEX IF NOT EXISTS request_comments_request_idx ON request_comments (request_id, created_at);
-
-INSERT INTO requests (id, username, title, category, description, full_name, status, created_at, updated_at) VALUES
-('req-sample-1', 'user', 'Шум в подъезде по вечерам', 'Общее имущество', 'После 22:00 регулярно слышен шум со второго этажа. Просьба разобраться с нарушителями тишины.', 'Иван Петров', 'in_progress', NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day'),
-('req-sample-2', 'user', 'Нет света в подъезде', 'Инженерные системы', 'Перегорела лампочка у лифта на 5 этаже, вечером очень темно.', 'Марина Соколова', 'new', NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days'),
-('req-sample-3', 'user', 'Заявка на замену счетчика воды', 'Счетчики', 'Нужно заменить счетчик холодной воды в квартире 54, срок поверки истек.', 'Александр Смирнов', 'resolved', NOW() - INTERVAL '10 days', NOW() - INTERVAL '2 days')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO request_comments (id, request_id, text, kind, created_at) VALUES
-('reqc-sample-1', 'req-sample-3', 'Исполнено, счетчик заменен 12.03', 'note', NOW() - INTERVAL '2 days')
-ON CONFLICT (id) DO NOTHING;

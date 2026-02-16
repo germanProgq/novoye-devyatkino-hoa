@@ -1,16 +1,21 @@
 #include "db.h"
 
-#include <sstream>
+#include <iostream>
+#include <string>
 #include <vector>
 
 #include "auth.h"
 
 PGconn* db_connect(const DbConfig& cfg) {
-  std::ostringstream ss;
-  ss << "host=" << cfg.host << " port=" << cfg.port << " dbname=" << cfg.name
-     << " user=" << cfg.user << " password=" << cfg.password;
-  PGconn* conn = PQconnectdb(ss.str().c_str());
+  const std::string port = std::to_string(cfg.port);
+  const char* keywords[] = {"host", "port", "dbname", "user", "password", nullptr};
+  const char* values[] = {cfg.host.c_str(), port.c_str(), cfg.name.c_str(), cfg.user.c_str(), cfg.password.c_str(), nullptr};
+
+  PGconn* conn = PQconnectdbParams(keywords, values, 0);
   if (PQstatus(conn) != CONNECTION_OK) {
+    std::cerr << "[warn] PostgreSQL connection failed for host=" << cfg.host
+              << " port=" << cfg.port << " db=" << cfg.name << " user=" << cfg.user
+              << " message=" << PQerrorMessage(conn);
     PQfinish(conn);
     return nullptr;
   }
@@ -72,6 +77,30 @@ bool upsert_user(const DbConfig& cfg, const AuthUser& user) {
                                0);
 
   const bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+  PQclear(res);
+  PQfinish(conn);
+  return ok;
+}
+
+bool delete_user(const DbConfig& cfg, const std::string& username) {
+  PGconn* conn = db_connect(cfg);
+  if (!conn) return false;
+
+  const char* paramValues[1] = {username.c_str()};
+  const int paramLengths[1] = {static_cast<int>(username.size())};
+  const int paramFormats[1] = {0};
+
+  PGresult* res = PQexecParams(conn,
+                               "DELETE FROM users WHERE username=$1;",
+                               1,
+                               nullptr,
+                               paramValues,
+                               paramLengths,
+                               paramFormats,
+                               0);
+
+  const auto status = PQresultStatus(res);
+  const bool ok = status == PGRES_COMMAND_OK || status == PGRES_TUPLES_OK;
   PQclear(res);
   PQfinish(conn);
   return ok;

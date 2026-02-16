@@ -10,3 +10,4 @@
 PGconn* db_connect(const DbConfig& cfg);
 bool fetch_users(const DbConfig& cfg, std::vector<AuthUser>& out);
 bool upsert_user(const DbConfig& cfg, const AuthUser& user);
+bool delete_user(const DbConfig& cfg, const std::string& username);

@@ -19,16 +19,17 @@ RUN apt-get update && \
       libpq5 && \
     rm -rf /var/lib/apt/lists/*
 
+RUN groupadd --system hoa && \
+    useradd --system --gid hoa --home /app --shell /usr/sbin/nologin hoa
+
 WORKDIR /app
 COPY --from=build /src/build/hoa_backend /app/hoa_backend
 COPY documents /app/documents
+RUN chown -R hoa:hoa /app
+
+USER hoa
 
 ENV PORT=8080
-ENV HOA_DB_HOST=db
-ENV HOA_DB_PORT=5432
-ENV HOA_DB_NAME=hoa
-ENV HOA_DB_USER=hoa
-ENV HOA_DB_PASSWORD=hoa_pass
 
 EXPOSE 8080
 CMD ["./hoa_backend"]

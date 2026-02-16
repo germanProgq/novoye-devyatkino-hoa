@@ -961,7 +961,6 @@ body.hero-ready .hero-frame-hidden {
 .login-card__canvas {
   position: relative;
   display: grid;
-  min-height: 560px;
   perspective: 1600px;
 }
 
@@ -1064,11 +1063,5 @@ body.hero-ready .hero-frame-hidden {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
-  }
-}
-
-@media (max-width: 640px) {
-  .login-card__canvas {
-    min-height: 520px;
   }
 }

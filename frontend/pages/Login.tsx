@@ -1,17 +1,12 @@
 import React, { CSSProperties, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { RegistrationResult, SessionUser, clearSession, fetchCurrentUser, loginWithPassword, registerResident } from '../utils/auth';
+import { RegistrationResult, SessionUser, fetchCurrentUser, loginWithPassword, registerResident } from '../utils/auth';
 
 type LocationState = { from?: { pathname: string } };
 
 type LoginProps = {
   onLogin: (user: SessionUser) => void;
 };
-
-const demoAccounts = [
-  { id: 'admin', username: 'admin', password: 'admin', role: 'Администратор' },
-  { id: 'user', username: 'user', password: 'user', role: 'Пользователь' },
-];
 
 const staggerStyle = (delay: string): CSSProperties => ({ '--login-delay': delay });
 
@@ -69,7 +64,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setFeedback('');
 
     if (!username.trim() || !password.trim()) {
-      setError('Введите логин и пароль или выберите тестовый аккаунт ниже.');
+      setError('Введите логин и пароль.');
       return;
     }
 
@@ -195,29 +190,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setRegistrationFeedback('Данные скопированы — отправьте их в чат или письмом.');
   };
 
-  const handleUseDemo = async (accountId: string) => {
-    const account = demoAccounts.find((acc) => acc.id === accountId);
-    if (!account) return;
-    try {
-      setError('');
-      const user = await loginWithPassword(account.username, account.password);
-      setUsername(account.username);
-      setPassword(account.password);
-      onLogin(user);
-      setFeedback('Тестовый логин сохранен — открываем панель.');
-      goNext();
-    } catch (err: any) {
-      setError(err?.message || 'Не удалось выполнить вход');
-    }
-  };
-
-  const handleClear = () => {
-    clearSession();
-    setUsername('');
-    setPassword('');
-    setFeedback('Данные удалены.');
-  };
-
   if (checkingSession) {
     return <div className="min-h-screen bg-[var(--color-sand)]" />;
   }
@@ -285,7 +257,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   <p className="text-xs uppercase tracking-[0.25em] text-[var(--color-ink-soft)]">Вход</p>
                   <h2 className="text-2xl font-bold text-[var(--color-ink)]">Войти в личный кабинет</h2>
                   <p className="text-sm text-[var(--color-ink-soft)]">
-                    Введите логин и пароль или воспользуйтесь готовыми тестовыми профилями.
+                    Введите ваш логин и пароль.
                   </p>
                 </div>
 
@@ -297,7 +269,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         type="text"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
-                        placeholder="например: admin"
+                        placeholder="Введите логин"
                         autoComplete="username"
                         className="w-full rounded-xl border border-[color:var(--color-info-border)] bg-white px-4 py-3 text-[var(--color-ink)] shadow-inner focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                       />
@@ -314,7 +286,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="например: admin"
+                        placeholder="Введите пароль"
                         autoComplete="current-password"
                         className="w-full rounded-xl border border-[color:var(--color-info-border)] bg-white px-4 py-3 text-[var(--color-ink)] shadow-inner focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                       />
@@ -334,48 +306,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
                 {error && <p className="text-sm text-accent">{error}</p>}
                 {feedback && !error && <p className="text-sm text-[var(--color-ink-soft)]">{feedback}</p>}
-
-                <div className="space-y-3 login-stagger" style={staggerStyle('220ms')}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-[var(--color-ink)]">Готовые тестовые аккаунты</span>
-                    <button
-                      type="button"
-                      onClick={handleClear}
-                      className="text-xs text-accent hover:underline"
-                    >
-                      Очистить данные
-                    </button>
-                  </div>
-
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    {demoAccounts.map((account) => (
-                      <button
-                        key={account.id}
-                        type="button"
-                        onClick={() => handleUseDemo(account.id)}
-                        className="group text-left p-4 rounded-xl border border-[color:var(--color-info-border)] bg-white hover:border-primary hover:-translate-y-0.5 transition"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-[var(--color-ink)] truncate">{account.role}</p>
-                            <p className="text-xs text-[var(--color-ink-soft)] truncate">Готовые учетные данные</p>
-                          </div>
-                          <span className="material-symbols-outlined text-primary group-hover:translate-x-0.5 transition">
-                            arrow_forward
-                          </span>
-                        </div>
-                        <div className="mt-3 space-y-1">
-                          <p className="text-xs font-mono bg-[var(--color-info-surface)] rounded-lg px-3 py-2 text-[var(--color-ink)] break-all">
-                            login: {account.username}
-                          </p>
-                          <p className="text-xs font-mono bg-[var(--color-info-surface)] rounded-lg px-3 py-2 text-[var(--color-ink)] break-all">
-                            password: {account.password}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
                 <div className="text-sm text-[var(--color-ink-soft)]">
                   Нет аккаунта?{' '}

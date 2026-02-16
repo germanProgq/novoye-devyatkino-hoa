@@ -1,4 +1,4 @@
 new/
 .DS_Store
 .vscode/
-backend/documents/.jwt_secret
+/.env
