@@ -40,6 +40,28 @@ docker compose watch backend
 
 This uses the `develop.watch` rule in `docker-compose.yml` to rebuild and restart the backend container whenever files in `./backend` change.
 
+## VPS deploy + auto-heal
+
+From the repository root on the VPS:
+
+```
+sudo ./scripts/deploy_vps.sh
+```
+
+What it does:
+
+- deploys the full Docker stack and waits for health endpoints to respond
+- installs `hoa-compose.service` (start stack on boot)
+- installs `hoa-self-heal.timer` (checks every minute, recovers stack, reboots host after repeated failures)
+
+Useful checks:
+
+```
+sudo systemctl status hoa-compose.service
+sudo systemctl status hoa-self-heal.timer
+sudo journalctl -u hoa-self-heal.service -n 50 --no-pager
+```
+
 Environment overrides (defaults shown) for backend container:
 
 - `PORT=8080`
