@@ -48,6 +48,14 @@ From the repository root on the VPS:
 sudo ./scripts/deploy_vps.sh
 ```
 
+If your app is served on a domain (recommended for production), run:
+
+```
+sudo DOMAIN=example.com DOMAIN_SCHEME=https ./scripts/deploy_vps.sh
+```
+
+This enables public-domain health checks in addition to local checks.
+
 What it does:
 
 - deploys the full Docker stack and waits for health endpoints to respond
