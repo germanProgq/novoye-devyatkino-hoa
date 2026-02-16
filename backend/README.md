@@ -19,11 +19,28 @@ cd backend
 ```
 
 Defaults to port `8080`. Override with `PORT=3001 ./build/hoa_backend`. The server tries to locate `documents/manifest.json` automatically; override with `HOA_DOCS_ROOT=/absolute/path/to/backend/documents`.
-If `HOA_JWT_SECRET` is not provided, the backend now generates one and saves it to `backend/documents/.jwt_secret` so that refresh tokens continue to work across restarts (delete the file to rotate the secret).
+`HOA_JWT_SECRET` is required and must be set explicitly.
 
 ## Docker (frontend + backend + Postgres)
 
+1) Create secrets/config:
+
 ```
+cp .env.example .env
+```
+
+2) Edit `.env` and replace all example secret values with your own unique secrets.
+
+3) Start:
+
+```
+docker compose up --build
+```
+
+If you change DB credentials in `.env` after the DB volume already exists, reinitialize once:
+
+```
+docker compose down -v
 docker compose up --build
 ```
 
@@ -48,6 +65,8 @@ From the repository root on the VPS:
 sudo ./scripts/deploy_vps.sh
 ```
 
+`deploy_vps.sh` requires a populated `.env` file and fails fast if it detects placeholder values.
+
 If your app is served on a domain (recommended for production), run:
 
 ```
@@ -70,20 +89,19 @@ sudo systemctl status hoa-self-heal.timer
 sudo journalctl -u hoa-self-heal.service -n 50 --no-pager
 ```
 
-Environment overrides (defaults shown) for backend container:
+Environment configuration for backend container:
 
 - `PORT=8080`
 - `HOA_DB_HOST=db`
 - `HOA_DB_PORT=5432`
-- `HOA_DB_NAME=hoa`
-- `HOA_DB_USER=hoa`
-- `HOA_DB_PASSWORD=hoa_pass`
-- `HOA_JWT_SECRET=change-me-in-prod`
-- `HOA_ADMIN_USERNAME=admin` / `HOA_ADMIN_PASSWORD=admin`
-- `HOA_USER_USERNAME=user` / `HOA_USER_PASSWORD=user`
-- `HOA_JWT_SECURE_COOKIES=0` (set to `1` behind HTTPS so cookies are `Secure`)
-- `HOA_JWT_SAMESITE=Lax` (use `None` with secure cookies if frontend and backend are on different origins)
-- `HOA_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:4173,http://localhost:8080`
+- `HOA_DB_NAME` (required)
+- `HOA_DB_USER` (required)
+- `HOA_DB_PASSWORD` (required, minimum 16 chars; placeholder values are rejected)
+- `HOA_JWT_SECRET` (required, minimum 32 chars; placeholder values are rejected)
+- `HOA_ADMIN_USERNAME` (required)
+- `HOA_ADMIN_PASSWORD` (required, minimum 14 chars with upper/lower/digit/symbol)
+- `NODE_ENV` (`production` => `Secure` + `SameSite=Strict`; `development` => `SameSite=Lax` without `Secure`)
+- `HOA_CORS_ALLOWED_ORIGINS` (required)
 
 ## API
 

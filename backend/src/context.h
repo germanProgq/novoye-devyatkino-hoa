@@ -10,9 +10,9 @@
 struct DbConfig {
   std::string host = "localhost";
   int port = 5432;
-  std::string name = "hoa";
-  std::string user = "hoa";
-  std::string password = "hoa_password";
+  std::string name;
+  std::string user;
+  std::string password;
 };
 
 enum class UserRole { User, Admin };

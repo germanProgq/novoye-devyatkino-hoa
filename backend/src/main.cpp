@@ -72,62 +72,64 @@ std::optional<fs::path> resolve_documents_root(const fs::path& exec_path) {
   return std::nullopt;
 }
 
-std::string random_secret(size_t length = 64) {
-  static std::mt19937_64 rng(std::random_device{}());
-  static std::uniform_int_distribution<unsigned long long> dist;
-  std::ostringstream oss;
-  while (oss.tellp() < static_cast<std::streamoff>(length)) {
-    oss << std::hex << dist(rng);
-  }
-  std::string out = oss.str();
-  out.resize(length);
-  return out;
-}
-
-bool parse_bool(const std::string& value) {
-  const std::string lower = [&]() {
-    std::string v = value;
-    std::transform(v.begin(), v.end(), v.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return trim_copy(v);
-  }();
-  return lower == "1" || lower == "true" || lower == "yes" || lower == "on";
-}
-
-std::optional<std::string> load_secret_from_file(const fs::path& path) {
-  std::ifstream in(path);
-  if (!in) return std::nullopt;
-  std::ostringstream ss;
-  ss << in.rdbuf();
-  const std::string trimmed = trim_copy(ss.str());
-  if (trimmed.size() < 16) return std::nullopt;
+std::optional<std::string> load_required_env(const char* name) {
+  const char* val = std::getenv(name);
+  if (!val) return std::nullopt;
+  const std::string trimmed = trim_copy(val);
+  if (trimmed.empty()) return std::nullopt;
   return trimmed;
 }
 
-std::string ensure_persistent_jwt_secret(const fs::path& docs_root) {
-  const fs::path secret_path = docs_root / ".jwt_secret";
-  if (auto existing = load_secret_from_file(secret_path)) {
-    return *existing;
+bool has_required_password_classes(const std::string& value) {
+  bool has_upper = false;
+  bool has_lower = false;
+  bool has_digit = false;
+  bool has_symbol = false;
+  for (unsigned char c : value) {
+    if (std::isupper(c)) has_upper = true;
+    else if (std::islower(c)) has_lower = true;
+    else if (std::isdigit(c)) has_digit = true;
+    else has_symbol = true;
   }
-
-  const std::string generated = random_secret();
-  std::ofstream out(secret_path, std::ios::out | std::ios::trunc);
-  if (out) {
-    out << generated;
-    std::cerr << "[info] HOA_JWT_SECRET not set. Generated secret persisted to " << secret_path << ".\n";
-  } else {
-    std::cerr << "[warn] HOA_JWT_SECRET not set and failed to persist secret to " << secret_path
-              << ". Tokens will reset on restart.\n";
-  }
-  return generated;
+  return has_upper && has_lower && has_digit && has_symbol;
 }
 
-SameSitePolicy parse_same_site(const std::string& value) {
-  std::string lower = value;
-  std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  lower = trim_copy(lower);
-  if (lower == "none") return SameSitePolicy::None;
-  if (lower == "strict") return SameSitePolicy::Strict;
-  return SameSitePolicy::Lax;
+bool looks_like_placeholder_secret(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return value.find("change_me") != std::string::npos || value.find("changeme") != std::string::npos ||
+         value.find("example") != std::string::npos || value.find("placeholder") != std::string::npos ||
+         value.find("admin") != std::string::npos || value.find("password") != std::string::npos ||
+         value == "secret";
+}
+
+bool validate_admin_password(const std::string& password, std::string& reason) {
+  if (password.size() < 14) {
+    reason = "must be at least 14 characters";
+    return false;
+  }
+  if (!has_required_password_classes(password)) {
+    reason = "must include upper/lowercase letters, digits, and symbols";
+    return false;
+  }
+  if (looks_like_placeholder_secret(password)) {
+    reason = "must not use placeholder/common values";
+    return false;
+  }
+  return true;
+}
+
+bool validate_secret(const std::string& secret, size_t min_len, std::string& reason) {
+  if (secret.size() < min_len) {
+    std::ostringstream ss;
+    ss << "must be at least " << min_len << " characters";
+    reason = ss.str();
+    return false;
+  }
+  if (looks_like_placeholder_secret(secret)) {
+    reason = "must not use placeholder/common values";
+    return false;
+  }
+  return true;
 }
 
 std::string normalize_spaces(const std::string& s) {
@@ -418,15 +420,34 @@ int main(int argc, char** argv) {
   } catch (...) {
     ctx.db.port = 5432;
   }
-  ctx.db.name = load_env("HOA_DB_NAME", "hoa");
-  ctx.db.user = load_env("HOA_DB_USER", "hoa");
-  ctx.db.password = load_env("HOA_DB_PASSWORD", "hoa_password");
+  const auto db_name = load_required_env("HOA_DB_NAME");
+  const auto db_user = load_required_env("HOA_DB_USER");
+  const auto db_password = load_required_env("HOA_DB_PASSWORD");
+  if (!db_name || !db_user || !db_password) {
+    std::cerr << "[error] Missing required DB credentials. Set HOA_DB_NAME, HOA_DB_USER, HOA_DB_PASSWORD in .env\n";
+    return 1;
+  }
+  std::string db_password_reason;
+  if (!validate_secret(*db_password, 16, db_password_reason)) {
+    std::cerr << "[error] HOA_DB_PASSWORD " << db_password_reason << "\n";
+    return 1;
+  }
+  ctx.db.name = *db_name;
+  ctx.db.user = *db_user;
+  ctx.db.password = *db_password;
 
   ctx.jwt.cookie_prefix = load_env("HOA_JWT_COOKIE_PREFIX", "hoa");
-  ctx.jwt.secret = load_env("HOA_JWT_SECRET", "");
-  if (ctx.jwt.secret.empty()) {
-    ctx.jwt.secret = ensure_persistent_jwt_secret(*docs_root);
+  const auto jwt_secret = load_required_env("HOA_JWT_SECRET");
+  if (!jwt_secret) {
+    std::cerr << "[error] Missing HOA_JWT_SECRET. Set a strong value in .env\n";
+    return 1;
   }
+  std::string jwt_reason;
+  if (!validate_secret(*jwt_secret, 32, jwt_reason)) {
+    std::cerr << "[error] HOA_JWT_SECRET " << jwt_reason << "\n";
+    return 1;
+  }
+  ctx.jwt.secret = *jwt_secret;
   try {
     ctx.jwt.access_ttl = std::chrono::seconds(std::stoll(load_env("HOA_JWT_ACCESS_TTL", "900")));
   } catch (...) {
@@ -437,69 +458,84 @@ int main(int argc, char** argv) {
   } catch (...) {
     ctx.jwt.refresh_ttl = std::chrono::seconds(604800);
   }
-  ctx.jwt.secure_cookies = parse_bool(load_env("HOA_JWT_SECURE_COOKIES", "0"));
-  const std::string same_site_env = load_env("HOA_JWT_SAMESITE", "");
-  if (!same_site_env.empty()) {
-    ctx.jwt.same_site = parse_same_site(same_site_env);
-  } else if (ctx.jwt.secure_cookies) {
-    // For secure deployments default to SameSite=None so httpOnly cookies flow in cross-site SPA requests.
-    ctx.jwt.same_site = SameSitePolicy::None;
+  std::string runtime_env = trim_copy(load_env("NODE_ENV", "production"));
+  std::transform(runtime_env.begin(), runtime_env.end(), runtime_env.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const bool is_development_env = runtime_env == "development" || runtime_env == "dev" || runtime_env == "local";
+  const bool is_production_env = runtime_env.empty() || runtime_env == "production" || runtime_env == "prod";
+  if (!is_development_env && !is_production_env) {
+    std::cerr << "[warn] Unrecognized NODE_ENV='" << runtime_env
+              << "'. Using production cookie policy (Secure + SameSite=Strict).\n";
   }
-  if (ctx.jwt.same_site == SameSitePolicy::None && !ctx.jwt.secure_cookies) {
-    std::cerr << "[warn] HOA_JWT_SAMESITE=None requires HOA_JWT_SECURE_COOKIES=1 (HTTPS). Falling back to Lax.\n";
-    ctx.jwt.same_site = SameSitePolicy::Lax;
-  }
+  ctx.jwt.secure_cookies = !is_development_env;
+  ctx.jwt.same_site = is_development_env ? SameSitePolicy::Lax : SameSitePolicy::Strict;
   ctx.jwt.cookie_domain = load_env("HOA_JWT_COOKIE_DOMAIN", "");
-  ctx.jwt.allowed_origins = split_and_trim(load_env("HOA_CORS_ALLOWED_ORIGINS",
-                                                    "http://localhost:5173,http://localhost:4173,http://localhost:8080,http://localhost:3000"));
+  const auto cors_origins = load_required_env("HOA_CORS_ALLOWED_ORIGINS");
+  if (!cors_origins) {
+    std::cerr << "[error] Missing HOA_CORS_ALLOWED_ORIGINS in .env\n";
+    return 1;
+  }
+  ctx.jwt.allowed_origins = split_and_trim(*cors_origins);
   if (ctx.jwt.allowed_origins.empty()) {
-    ctx.jwt.allowed_origins.push_back("http://localhost:5173");
+    std::cerr << "[error] HOA_CORS_ALLOWED_ORIGINS is empty after parsing\n";
+    return 1;
   }
 
   ensure_registration_table(ctx.db);
   ensure_account_people_phone(ctx.db);
-  if (auto seed_path = find_registration_seed(exec_path)) {
-    load_registration_seeds(ctx.db, *seed_path);
-  }
 
   const auto normalize_name = [](std::string value) {
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return trim_copy(value);
   };
-  std::vector<AuthUser> configured_users;
-  auto add_user = [&](const std::string& username, const std::string& password, UserRole role) {
-    const auto norm = normalize_name(username);
-    if (norm.empty() || password.empty()) return;
-    for (const auto& existing : configured_users) {
-      if (normalize_name(existing.username) == norm) return;
-    }
-    AuthUser user;
-    user.username = username;
-    user.password_hash = hash_password(password);
-    user.role = role;
-    configured_users.push_back(user);
-  };
+  const auto admin_username = load_required_env("HOA_ADMIN_USERNAME");
+  const auto admin_password = load_required_env("HOA_ADMIN_PASSWORD");
+  if (!admin_username || !admin_password) {
+    std::cerr << "[error] Missing HOA_ADMIN_USERNAME or HOA_ADMIN_PASSWORD in .env\n";
+    return 1;
+  }
+  if (normalize_name(*admin_username).empty()) {
+    std::cerr << "[error] HOA_ADMIN_USERNAME cannot be empty\n";
+    return 1;
+  }
+  std::string admin_password_reason;
+  if (!validate_admin_password(*admin_password, admin_password_reason)) {
+    std::cerr << "[error] HOA_ADMIN_PASSWORD " << admin_password_reason << "\n";
+    return 1;
+  }
 
-  add_user(load_env("HOA_ADMIN_USERNAME", "admin"), load_env("HOA_ADMIN_PASSWORD", "admin"), UserRole::Admin);
-  add_user(load_env("HOA_USER_USERNAME", "user"), load_env("HOA_USER_PASSWORD", "user"), UserRole::User);
+  AuthUser admin_user;
+  admin_user.username = *admin_username;
+  admin_user.password_hash = hash_password(*admin_password);
+  admin_user.role = UserRole::Admin;
 
-  // Persist configured users to DB (idempotent), then load from DB.
-  bool db_users_loaded = false;
-  for (const auto& u : configured_users) {
-    if (!upsert_user(ctx.db, u)) {
-      std::cerr << "[warn] Failed to upsert user " << u.username << " into DB\n";
+  // Persist admin credentials to DB (idempotent).
+  if (!upsert_user(ctx.db, admin_user)) {
+    std::cerr << "[warn] Failed to upsert admin user " << admin_user.username << " into DB\n";
+  }
+
+  // Remove legacy demo user from older seeds (and cascade demo-only data).
+  if (normalize_name(admin_user.username) != "user") {
+    if (!delete_user(ctx.db, "user")) {
+      std::cerr << "[warn] Failed to cleanup legacy demo user 'user'\n";
     }
   }
+
   std::vector<AuthUser> db_users;
   if (fetch_users(ctx.db, db_users) && !db_users.empty()) {
     ctx.users = std::move(db_users);
-    db_users_loaded = true;
   } else {
-    ctx.users = configured_users;
+    ctx.users = {admin_user};
   }
 
   if (ctx.users.empty()) {
-    std::cerr << "[error] No auth users configured. Set HOA_ADMIN_USERNAME/HOA_ADMIN_PASSWORD and ensure DB is reachable.\n";
+    std::cerr << "[error] No auth users configured. Ensure admin credentials are set and DB is reachable.\n";
+    return 1;
+  }
+  const bool has_admin = std::any_of(ctx.users.begin(), ctx.users.end(), [](const AuthUser& user) {
+    return user.role == UserRole::Admin;
+  });
+  if (!has_admin) {
+    std::cerr << "[error] No admin user found after initialization.\n";
     return 1;
   }
 
@@ -559,6 +595,7 @@ int main(int argc, char** argv) {
   if (!ctx.jwt.cookie_domain.empty()) {
     std::cout << " Domain=" << ctx.jwt.cookie_domain;
   }
+  std::cout << " NODE_ENV=" << (runtime_env.empty() ? "production" : runtime_env);
   std::cout << "\n";
   std::cout << "[info] CORS allowed origins=";
   for (size_t i = 0; i < ctx.jwt.allowed_origins.size(); ++i) {

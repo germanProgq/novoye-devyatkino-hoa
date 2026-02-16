@@ -9,6 +9,7 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="${APP_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
+ENV_FILE="${ENV_FILE:-$APP_DIR/.env}"
 APP_URL="${APP_URL:-http://localhost:3000/}"
 API_URL="${API_URL:-http://localhost:3000/backend/api/documents}"
 DOMAIN="${DOMAIN:-}"
@@ -52,6 +53,35 @@ fi
 if ! command -v systemctl >/dev/null 2>&1; then
   echo "systemd is required for auto-restart and self-heal timer."
   exit 1
+fi
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "Missing $ENV_FILE. Copy .env.example to .env and set strong secrets first."
+  exit 1
+fi
+
+if grep -Eiq 'CHANGE_ME|placeholder|example\.com' "$ENV_FILE"; then
+  echo "$ENV_FILE still contains placeholder values. Replace them before deploy."
+  exit 1
+fi
+
+get_env_value() {
+  local file="$1"
+  local key="$2"
+  local line
+  line="$(grep -E "^${key}=" "$file" | tail -n 1 || true)"
+  printf '%s' "${line#*=}"
+}
+
+if [[ -f "$APP_DIR/.env.example" ]]; then
+  for key in POSTGRES_PASSWORD HOA_DB_PASSWORD HOA_ADMIN_PASSWORD HOA_JWT_SECRET; do
+    example_value="$(get_env_value "$APP_DIR/.env.example" "$key")"
+    actual_value="$(get_env_value "$ENV_FILE" "$key")"
+    if [[ -n "$example_value" && "$actual_value" == "$example_value" ]]; then
+      echo "$ENV_FILE uses the example default for $key. Set a unique secret first."
+      exit 1
+    fi
+  done
 fi
 
 log() {

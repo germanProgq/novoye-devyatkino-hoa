@@ -2,8 +2,10 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 
 COPY . .
 
