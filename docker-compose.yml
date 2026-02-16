@@ -1,23 +1,26 @@
 services:
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: hoa
       POSTGRES_PASSWORD: hoa_pass
       POSTGRES_DB: hoa
-    ports:
-      - "55432:5432"
     volumes:
       - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - db_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hoa -d hoa"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - backend_db
 
   backend:
     build:
       context: ./backend
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
@@ -34,9 +37,36 @@ services:
       HOA_USER_USERNAME: user
       HOA_USER_PASSWORD: user
       HOA_CORS_ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:5173,http://localhost:4173,http://localhost:8080"
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
+    networks:
+      - frontend_backend
+      - backend_db
     develop:
       watch:
         - path: ./backend
           action: rebuild
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_BACKEND_URL: /backend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+    networks:
+      - public
+      - frontend_backend
+
+volumes:
+  db_data:
+
+networks:
+  public:
+  frontend_backend:
+    internal: true
+  backend_db:
+    internal: true

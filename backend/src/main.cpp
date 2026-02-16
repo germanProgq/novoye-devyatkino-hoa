@@ -268,6 +268,17 @@ bool ensure_registration_table(const DbConfig& cfg) {
   return ok;
 }
 
+bool ensure_account_people_phone(const DbConfig& cfg) {
+  PGconn* conn = db_connect(cfg);
+  if (!conn) return false;
+  const char* ddl = "ALTER TABLE account_people ADD COLUMN IF NOT EXISTS phone TEXT;";
+  PGresult* res = PQexec(conn, ddl);
+  const bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+  PQclear(res);
+  PQfinish(conn);
+  return ok;
+}
+
 bool upsert_registration_resident(const DbConfig& cfg,
                                   const std::string& id,
                                   const std::string& display,
@@ -446,6 +457,7 @@ int main(int argc, char** argv) {
   }
 
   ensure_registration_table(ctx.db);
+  ensure_account_people_phone(ctx.db);
   if (auto seed_path = find_registration_seed(exec_path)) {
     load_registration_seeds(ctx.db, *seed_path);
   }

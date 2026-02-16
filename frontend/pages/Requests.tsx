@@ -3,7 +3,7 @@ import { RequestComment, RequestItem, RequestStatus } from '../types';
 
 const statusMeta: Record<RequestStatus, { label: string; color: string; bg: string; icon: string }> = {
   new: { label: 'Новое', color: 'text-primary', bg: 'bg-primary/10', icon: 'fiber_new' },
-  in_progress: { label: 'В работе', color: 'text-[var(--color-ink)]', bg: 'bg-amber-100', icon: 'build' },
+  in_progress: { label: 'В работе', color: 'text-amber-900', bg: 'bg-amber-100', icon: 'build' },
   resolved: { label: 'Решено', color: 'text-emerald-700', bg: 'bg-emerald-100', icon: 'task_alt' },
 };
 const commentKindLabel: Record<RequestComment['kind'], string> = {

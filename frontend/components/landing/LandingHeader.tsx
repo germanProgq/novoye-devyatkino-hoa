@@ -185,7 +185,7 @@ const LandingHeader: React.FC = () => {
 
   return (
     <div
-      className={`landing-header fixed top-0 left-0 right-0 z-[60] border-b ${pastHero ? 'landing-header--pinned' : 'landing-header--hero'}`}
+      className={`landing-header fixed top-0 left-0 right-0 z-[60] border-b overflow-visible ${pastHero ? 'landing-header--pinned' : 'landing-header--hero'}`}
       ref={headerRef}
       style={headerStyle}
     >
@@ -206,7 +206,7 @@ const LandingHeader: React.FC = () => {
           </span>
         </a>
 
-        <nav className="hidden lg:flex items-center gap-2">
+        <nav className="hidden lg:flex items-center gap-2 relative z-[70]">
           {NAV_ITEMS.map((item) => {
             if (item.type === 'group') {
               const isOpen = openDropdown === item.id;
@@ -224,7 +224,7 @@ const LandingHeader: React.FC = () => {
               return (
                 <div
                   key={item.id}
-                  className="relative"
+                  className={`relative ${isOpen ? 'z-[80]' : ''}`}
                   onMouseEnter={() => {
                     cancelClose();
                     setOpenDropdown(item.id);
@@ -243,7 +243,7 @@ const LandingHeader: React.FC = () => {
                     <span className="material-symbols-outlined text-base">{isOpen ? 'expand_less' : 'expand_more'}</span>
                   </Link>
                   <div
-                    className={`absolute left-0 mt-2 w-64 rounded-2xl border border-[color:var(--color-info-border)] bg-white shadow-xl transition-all duration-150 ${
+                    className={`absolute left-0 z-[90] mt-2 w-64 rounded-2xl border border-[color:var(--color-info-border)] bg-[var(--color-surface)] shadow-xl backdrop-blur-md transition-all duration-150 ${
                       isOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-1 pointer-events-none'
                     }`}
                     onMouseEnter={cancelClose}

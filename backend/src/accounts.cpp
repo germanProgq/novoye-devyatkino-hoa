@@ -26,6 +26,7 @@ struct AccountPersonLink {
   std::string normalized_name;
   std::string apartment;
   std::vector<std::string> houses;
+  std::string phone;
   std::string created_at;
   std::string updated_at;
 };
@@ -248,12 +249,14 @@ bool fetch_account_links(AppContext& ctx, std::vector<AccountPersonLink>& out, c
 
   const char* query_all =
       "SELECT id, username, COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), COALESCE(houses, ARRAY[]::TEXT[]), "
-      "COALESCE(to_char(created_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ'), ''), COALESCE(to_char(updated_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ'), '') "
+      "COALESCE(phone, ''), COALESCE(to_char(created_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ'), ''), "
+      "COALESCE(to_char(updated_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ'), '') "
       "FROM account_people ORDER BY updated_at DESC;";
 
   const char* query_user =
       "SELECT id, username, COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), COALESCE(houses, ARRAY[]::TEXT[]), "
-      "COALESCE(to_char(created_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ'), ''), COALESCE(to_char(updated_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ'), '') "
+      "COALESCE(phone, ''), COALESCE(to_char(created_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ'), ''), "
+      "COALESCE(to_char(updated_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ'), '') "
       "FROM account_people WHERE username=$1 ORDER BY updated_at DESC;";
 
   PGresult* res = nullptr;
@@ -283,8 +286,9 @@ bool fetch_account_links(AppContext& ctx, std::vector<AccountPersonLink>& out, c
     link.normalized_name = PQgetvalue(res, i, 3);
     link.apartment = PQgetvalue(res, i, 4);
     link.houses = parse_pg_text_array(PQgetvalue(res, i, 5));
-    link.created_at = PQgetvalue(res, i, 6);
-    link.updated_at = PQgetvalue(res, i, 7);
+    link.phone = PQgetvalue(res, i, 6);
+    link.created_at = PQgetvalue(res, i, 7);
+    link.updated_at = PQgetvalue(res, i, 8);
     out.push_back(std::move(link));
   }
 
@@ -299,16 +303,17 @@ bool upsert_account_link(AppContext& ctx, AccountPersonLink& link) {
 
   const std::string houses = to_pg_text_array(link.houses);
 
-  const char* paramValues[6];
-  const int paramLengths[6] = {
+  const char* paramValues[7];
+  const int paramLengths[7] = {
       static_cast<int>(link.id.size()),
       static_cast<int>(link.username.size()),
       static_cast<int>(link.display_name.size()),
       static_cast<int>(link.normalized_name.size()),
       static_cast<int>(link.apartment.size()),
       static_cast<int>(houses.size()),
+      static_cast<int>(link.phone.size()),
   };
-  const int paramFormats[6] = {0, 0, 0, 0, 0, 0};
+  const int paramFormats[7] = {0, 0, 0, 0, 0, 0, 0};
 
   paramValues[0] = link.id.c_str();
   paramValues[1] = link.username.c_str();
@@ -316,16 +321,18 @@ bool upsert_account_link(AppContext& ctx, AccountPersonLink& link) {
   paramValues[3] = link.normalized_name.c_str();
   paramValues[4] = link.apartment.empty() ? nullptr : link.apartment.c_str();
   paramValues[5] = houses.c_str();
+  paramValues[6] = link.phone.empty() ? nullptr : link.phone.c_str();
 
   PGresult* res = PQexecParams(conn,
-                               "INSERT INTO account_people (id, username, display_name, normalized_name, apartment, houses, updated_at) "
-                               "VALUES ($1,$2,$3,$4,$5,$6,NOW()) "
+                               "INSERT INTO account_people (id, username, display_name, normalized_name, apartment, houses, phone, updated_at) "
+                               "VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()) "
                                "ON CONFLICT (normalized_name) DO UPDATE SET username=EXCLUDED.username, display_name=EXCLUDED.display_name, "
-                               "apartment=EXCLUDED.apartment, houses=EXCLUDED.houses, updated_at=NOW() "
+                               "apartment=EXCLUDED.apartment, houses=EXCLUDED.houses, phone=EXCLUDED.phone, updated_at=NOW() "
                                "RETURNING id, username, COALESCE(display_name, ''), normalized_name, COALESCE(apartment, ''), "
-                               "COALESCE(houses, ARRAY[]::TEXT[]), COALESCE(to_char(created_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ'), ''), "
+                               "COALESCE(houses, ARRAY[]::TEXT[]), COALESCE(phone, ''), "
+                               "COALESCE(to_char(created_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ'), ''), "
                                "COALESCE(to_char(updated_at, 'YYYY-MM-DD\"T\"HH24:MI:SSZ'), '');",
-                               6,
+                               7,
                                nullptr,
                                paramValues,
                                paramLengths,
@@ -345,8 +352,9 @@ bool upsert_account_link(AppContext& ctx, AccountPersonLink& link) {
     link.normalized_name = PQgetvalue(res, 0, 3);
     link.apartment = PQgetvalue(res, 0, 4);
     link.houses = parse_pg_text_array(PQgetvalue(res, 0, 5));
-    link.created_at = PQgetvalue(res, 0, 6);
-    link.updated_at = PQgetvalue(res, 0, 7);
+    link.phone = PQgetvalue(res, 0, 6);
+    link.created_at = PQgetvalue(res, 0, 7);
+    link.updated_at = PQgetvalue(res, 0, 8);
   }
 
   PQclear(res);
@@ -410,6 +418,7 @@ json serialize_link(const AccountPersonLink& link) {
       {"houses", link.houses},
   };
   if (!link.apartment.empty()) payload["apartment"] = link.apartment;
+  if (!link.phone.empty()) payload["phone"] = link.phone;
   if (!link.created_at.empty()) payload["createdAt"] = link.created_at;
   if (!link.updated_at.empty()) payload["updatedAt"] = link.updated_at;
   return payload;
@@ -454,6 +463,7 @@ void register_account_routes(httplib::Server& server, AppContext& ctx, const std
     std::string normalized = trim(get_request_value(req, "normalizedName", body_json));
     const std::vector<std::string> houses = get_request_array(req, "houses", body_json);
     const std::string apartment = trim(get_request_value(req, "apartment", body_json));
+    const std::string phone = trim(get_request_value(req, "phone", body_json));
     std::string id = trim(get_request_value(req, "id", body_json));
 
     if (username.empty()) {
@@ -486,6 +496,7 @@ void register_account_routes(httplib::Server& server, AppContext& ctx, const std
     link.normalized_name = normalized;
     link.apartment = apartment;
     link.houses = houses;
+    link.phone = phone;
 
     if (!upsert_account_link(ctx, link)) {
       res.status = 500;

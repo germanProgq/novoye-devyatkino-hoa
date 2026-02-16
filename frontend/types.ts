@@ -119,6 +119,7 @@ export interface AccountPersonLink {
   normalizedName: string;
   apartment?: string;
   houses: string[];
+  phone?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -127,7 +128,6 @@ export interface AccountDebtEntry extends AccountPersonLink {
   debt: number;
   debtorId?: string;
   note?: string;
-  phone?: string;
 }
 
 export interface AccountDebtSummary {
