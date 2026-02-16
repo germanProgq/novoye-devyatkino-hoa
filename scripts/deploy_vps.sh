@@ -11,10 +11,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="${APP_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 APP_URL="${APP_URL:-http://localhost:3000/}"
 API_URL="${API_URL:-http://localhost:3000/backend/api/documents}"
+DOMAIN="${DOMAIN:-}"
+DOMAIN_SCHEME="${DOMAIN_SCHEME:-https}"
+PUBLIC_APP_URL="${PUBLIC_APP_URL:-}"
+PUBLIC_API_URL="${PUBLIC_API_URL:-}"
+REQUIRE_PUBLIC_CHECK="${REQUIRE_PUBLIC_CHECK:-}"
 REBOOT_THRESHOLD="${REBOOT_THRESHOLD:-5}"
 CHECK_RETRIES="${CHECK_RETRIES:-30}"
 CHECK_SLEEP_SECONDS="${CHECK_SLEEP_SECONDS:-3}"
 DOCKER_BIN="$(command -v docker || true)"
+
+if [[ -n "$DOMAIN" ]]; then
+  PUBLIC_APP_URL="${PUBLIC_APP_URL:-${DOMAIN_SCHEME}://${DOMAIN}/}"
+  PUBLIC_API_URL="${PUBLIC_API_URL:-${DOMAIN_SCHEME}://${DOMAIN}/backend/api/documents}"
+fi
+
+if [[ -z "$REQUIRE_PUBLIC_CHECK" ]]; then
+  if [[ -n "$DOMAIN" || -n "$PUBLIC_APP_URL" || -n "$PUBLIC_API_URL" ]]; then
+    REQUIRE_PUBLIC_CHECK="1"
+  else
+    REQUIRE_PUBLIC_CHECK="0"
+  fi
+fi
 
 if [[ -z "$DOCKER_BIN" ]]; then
   echo "Docker is not installed. Install Docker + docker compose plugin first."
@@ -49,6 +67,16 @@ wait_for_stack() {
   local i
   for ((i = 1; i <= CHECK_RETRIES; i++)); do
     if check_url "$APP_URL" && check_url "$API_URL"; then
+      if [[ "$REQUIRE_PUBLIC_CHECK" == "1" ]]; then
+        if [[ -z "$PUBLIC_APP_URL" || -z "$PUBLIC_API_URL" ]]; then
+          sleep "$CHECK_SLEEP_SECONDS"
+          continue
+        fi
+        if ! check_url "$PUBLIC_APP_URL" || ! check_url "$PUBLIC_API_URL"; then
+          sleep "$CHECK_SLEEP_SECONDS"
+          continue
+        fi
+      fi
       log "Health checks passed."
       return 0
     fi
@@ -92,6 +120,9 @@ Type=oneshot
 Environment=APP_DIR=$APP_DIR
 Environment=APP_URL=$APP_URL
 Environment=API_URL=$API_URL
+Environment=PUBLIC_APP_URL=$PUBLIC_APP_URL
+Environment=PUBLIC_API_URL=$PUBLIC_API_URL
+Environment=REQUIRE_PUBLIC_CHECK=$REQUIRE_PUBLIC_CHECK
 Environment=REBOOT_THRESHOLD=$REBOOT_THRESHOLD
 ExecStart=/bin/bash $APP_DIR/scripts/self_heal.sh
 EOF
@@ -129,7 +160,11 @@ main() {
 
   log "Waiting for frontend and backend health endpoints."
   if ! wait_for_stack; then
-    echo "Deployment failed health checks for $APP_URL and/or $API_URL."
+    echo "Deployment failed health checks."
+    echo "Local checks: $APP_URL and $API_URL"
+    if [[ "$REQUIRE_PUBLIC_CHECK" == "1" ]]; then
+      echo "Public checks: $PUBLIC_APP_URL and $PUBLIC_API_URL"
+    fi
     exit 1
   fi
 
@@ -140,8 +175,12 @@ main() {
   systemctl start hoa-self-heal.service
 
   log "Deploy complete."
-  log "Frontend: $APP_URL"
-  log "Health API via frontend proxy: $API_URL"
+  log "Local frontend: $APP_URL"
+  log "Local health API via frontend proxy: $API_URL"
+  if [[ "$REQUIRE_PUBLIC_CHECK" == "1" ]]; then
+    log "Public frontend: $PUBLIC_APP_URL"
+    log "Public health API via frontend proxy: $PUBLIC_API_URL"
+  fi
   log "Services: hoa-compose.service + hoa-self-heal.timer"
 }
 

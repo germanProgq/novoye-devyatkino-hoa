@@ -5,6 +5,9 @@ set -Eeuo pipefail
 APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 APP_URL="${APP_URL:-http://localhost:3000/}"
 API_URL="${API_URL:-http://localhost:3000/backend/api/documents}"
+PUBLIC_APP_URL="${PUBLIC_APP_URL:-}"
+PUBLIC_API_URL="${PUBLIC_API_URL:-}"
+REQUIRE_PUBLIC_CHECK="${REQUIRE_PUBLIC_CHECK:-0}"
 FAILURE_STATE_DIR="${FAILURE_STATE_DIR:-/var/lib/hoa-self-heal}"
 FAILURE_STATE_FILE="${FAILURE_STATE_DIR}/consecutive_failures"
 REBOOT_THRESHOLD="${REBOOT_THRESHOLD:-5}"
@@ -21,6 +24,18 @@ check_endpoint() {
 
 check_stack() {
   check_endpoint "$APP_URL" && check_endpoint "$API_URL"
+
+  if [[ "$REQUIRE_PUBLIC_CHECK" == "1" ]]; then
+    [[ -n "$PUBLIC_APP_URL" ]] || {
+      log "REQUIRE_PUBLIC_CHECK=1 but PUBLIC_APP_URL is empty."
+      return 1
+    }
+    [[ -n "$PUBLIC_API_URL" ]] || {
+      log "REQUIRE_PUBLIC_CHECK=1 but PUBLIC_API_URL is empty."
+      return 1
+    }
+    check_endpoint "$PUBLIC_APP_URL" && check_endpoint "$PUBLIC_API_URL"
+  fi
 }
 
 read_failures() {
