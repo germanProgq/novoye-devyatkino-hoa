@@ -5,12 +5,12 @@
   {"id": "reg-4", "displayName": "Гусева Людмила Борисовна", "house": "4", "apartment": "22", "phone": "+7 900 000-00-04"},
   {"id": "reg-5", "displayName": "Комаров Виктор Степанович", "house": "5", "apartment": "29", "phone": "+7 900 000-00-05"},
   {"id": "reg-6", "displayName": "Киселёва Оксана Леонидовна", "house": "6", "apartment": "36", "phone": "+7 900 000-00-06"},
-  {"id": "reg-7", "displayName": "Поляков Григорий Тимофеевич", "house": "7", "apartment": "43", "phone": "+7 900 000-00-07"},
-  {"id": "reg-8", "displayName": "Борисова Жанна Эдуардовна", "house": "8", "apartment": "50", "phone": "+7 900 000-00-08"},
-  {"id": "reg-9", "displayName": "Карпов Олег Игоревич", "house": "9", "apartment": "57", "phone": "+7 900 000-00-09"},
-  {"id": "reg-10", "displayName": "Белова Ирина Аркадьевна", "house": "10", "apartment": "64", "phone": "+7 900 000-00-10"},
-  {"id": "reg-11", "displayName": "Зайцев Роман Валерьевич", "house": "11", "apartment": "71", "phone": "+7 900 000-00-11"},
-  {"id": "reg-12", "displayName": "Гусева Людмила Борисовна", "house": "12", "apartment": "78", "phone": "+7 900 000-00-12"},
-  {"id": "reg-13", "displayName": "Комаров Виктор Степанович", "house": "13", "apartment": "85", "phone": "+7 900 000-00-13"},
-  {"id": "reg-14", "displayName": "Киселёва Оксана Леонидовна", "house": "14", "apartment": "2", "phone": "+7 900 000-00-14"}
+  {"id": "reg-7", "displayName": "Макарова Полина Антоновна", "house": "7", "apartment": "43", "phone": "+7 900 000-00-07"},
+  {"id": "reg-8", "displayName": "Поляков Григорий Тимофеевич", "house": "8", "apartment": "50", "phone": "+7 900 000-00-08"},
+  {"id": "reg-9", "displayName": "Борисова Жанна Эдуардовна", "house": "9", "apartment": "57", "phone": "+7 900 000-00-09"},
+  {"id": "reg-10", "displayName": "Орехова Лилия Романовна", "house": "10", "apartment": "64", "phone": "+7 900 000-00-10"},
+  {"id": "reg-11", "displayName": "Тарасов Константин Юрьевич", "house": "11", "apartment": "71", "phone": "+7 900 000-00-11"},
+  {"id": "reg-12", "displayName": "Беляева Регина Максимовна", "house": "12", "apartment": "78", "phone": "+7 900 000-00-12"},
+  {"id": "reg-13", "displayName": "Крылов Арсений Денисович", "house": "13", "apartment": "85", "phone": "+7 900 000-00-13"},
+  {"id": "reg-14", "displayName": "Лаптева Марина Геннадьевна", "house": "14", "apartment": "2", "phone": "+7 900 000-00-14"}
 ]
